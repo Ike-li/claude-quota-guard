@@ -15,7 +15,6 @@ cat > "$CFG" <<EOF
 CQG_CTX_NOTICE=50
 CQG_CTX_HALT=85
 CQG_RATE_HALT=85
-CQG_RATE_PROJ_HALT=150
 CQG_LANG=en
 CQG_MAX_AGE=60
 CQG_SNAPSHOT="$SNAP"
@@ -44,6 +43,9 @@ expect "sub: ctx30/5h40 → silent" EMPTY "$(run '')"
 rm -f "$STAMP"; snap 92 9 110 1h 5d 30
 expect "sub: 5h92 → QUOTA-LOW" "QUOTA-LOW" "$(run '')"
 expect "sub: 5h92 shows 5h line" "5h usage: 92%" "$(run '')"
+
+rm -f "$STAMP"; snap 17 12 164 4h 5d 20
+expect "sub: 5h17 + proj164 → silent (proj not a trigger)" EMPTY "$(run '')"
 
 rm -f "$STAMP"; snap 40 9 45 2h 5d 88
 expect "sub: ctx88 → QUOTA-LOW" "QUOTA-LOW" "$(run '')"

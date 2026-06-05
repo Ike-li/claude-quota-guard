@@ -10,8 +10,6 @@
 : "${CQG_CTX_HALT:=85}"
 # 5-hour rate-limit usage that triggers convergence (subscription only).
 : "${CQG_RATE_HALT:=85}"
-# 5-hour projected-at-reset usage that triggers convergence (subscription only).
-: "${CQG_RATE_PROJ_HALT:=150}"
 
 # ── Language for injected signals: en | zh ─────────────────────────────
 : "${CQG_LANG:=en}"

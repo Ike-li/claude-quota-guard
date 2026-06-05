@@ -39,7 +39,7 @@ keep only the *rules* in `CLAUDE.md`.
 
 | Condition | Action | Signal |
 |---|---|---|
-| ctx ≥ 85% **or** 5h ≥ 85% / projected ≥ 150% | **Converge** — write handoff, stop | `[QUOTA-LOW]` |
+| ctx ≥ 85% **or** 5h ≥ 85% | **Converge** — write handoff, stop | `[QUOTA-LOW]` |
 | 50% ≤ ctx < 85% | **Advise once** — keep working | `[CTX-NOTICE]` |
 | below thresholds | silent | — |
 
@@ -94,7 +94,6 @@ also be overridden via environment variable.
 CQG_CTX_NOTICE=50        # ctx% for the advisory notice
 CQG_CTX_HALT=85          # ctx% that triggers convergence
 CQG_RATE_HALT=85         # 5h% that triggers convergence (subscription)
-CQG_RATE_PROJ_HALT=150   # 5h projected% that triggers convergence
 CQG_LANG=en              # en | zh
 CQG_MAX_AGE=60           # ignore snapshots older than N seconds
 ```
@@ -141,9 +140,10 @@ The context tier never depends on this and always runs.
   "don't expand on the *next* step."
 - **Guidance, not a hard stop.** The signal strongly steers the model; it can't
   forcibly halt it. The `CLAUDE.md` protocol uses MUST language to reinforce.
-- **Projection is noisy early.** The 5h projection over-estimates in the first
-  few minutes of a window (small sample), so the primary trigger is `5h ≥ 85%`
-  with projection as a secondary signal.
+- **Projection is display-only.** The 5h "projected at reset" figure is exposed
+  for status lines that want to show it, but it deliberately does **not** trigger
+  convergence — early in a window it extrapolates from a tiny sample and
+  over-estimates wildly. The only rate trigger is actual `5h ≥ 85%`.
 - **API mode has no rate awareness.** Pay-as-you-go has no 5h/7d budget to watch;
   only the context tier applies.
 

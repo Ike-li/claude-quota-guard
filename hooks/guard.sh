@@ -6,10 +6,9 @@
 # which Claude Code injects into the model's context for this turn.
 #
 # Tiers:
-#   ctx >= CQG_CTX_HALT  OR  5h >= CQG_RATE_HALT / proj >= CQG_RATE_PROJ_HALT
-#                                       -> [QUOTA-LOW]   (converge)
-#   CQG_CTX_NOTICE <= ctx < CQG_CTX_HALT-> [CTX-NOTICE]  (advise once)
-#   otherwise                           -> silent
+#   ctx >= CQG_CTX_HALT  OR  5h >= CQG_RATE_HALT  -> [QUOTA-LOW]   (converge)
+#   CQG_CTX_NOTICE <= ctx < CQG_CTX_HALT          -> [CTX-NOTICE]  (advise once)
+#   otherwise                                     -> silent
 #
 # Rate-limit tier is skipped on API/relay mode (no real 5h/7d concept).
 
@@ -21,7 +20,7 @@ CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 [[ -f "$CONFIG" ]] && # shellcheck disable=SC1090
   . "$CONFIG"
 : "${CQG_CTX_NOTICE:=50}"; : "${CQG_CTX_HALT:=85}"
-: "${CQG_RATE_HALT:=85}";  : "${CQG_RATE_PROJ_HALT:=150}"
+: "${CQG_RATE_HALT:=85}"
 : "${CQG_LANG:=en}";       : "${CQG_MAX_AGE:=60}"
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_NOTICE_STAMP:=$HOME/.claude/.cqg-notice-stamp}"
@@ -53,7 +52,7 @@ if [[ -n "$base_url" && "$base_url" != *"api.anthropic.com"* ]]; then is_relay=t
 # ── evaluate tiers ─────────────────────────────────────────────────────
 quota_trigger=false
 if [[ "$is_relay" == "false" ]]; then
-  if ge "$usage_5h" "$CQG_RATE_HALT" || ge "$proj_5h" "$CQG_RATE_PROJ_HALT"; then
+  if ge "$usage_5h" "$CQG_RATE_HALT"; then
     quota_trigger=true
   fi
 fi
