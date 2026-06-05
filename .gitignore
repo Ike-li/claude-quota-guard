@@ -1,0 +1,7 @@
+# local config (created by install.sh from config.example.sh)
+config.sh
+# runtime / backups
+*.cqg-backup.*
+.quota-now
+.cqg-notice-stamp
+*.bak
