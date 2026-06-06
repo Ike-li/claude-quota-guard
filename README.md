@@ -59,7 +59,7 @@ way. All thresholds are configurable.
 Requires: `bash`, `awk`, `bc`, `date`, `stat`, `jq`.
 
 ```bash
-git clone https://github.com/<you>/claude-quota-guard
+git clone https://github.com/Ike-li/claude-quota-guard
 cd claude-quota-guard
 ./install.sh
 ```
@@ -113,7 +113,18 @@ CQG_CTX_HALT=85          # ctx% that triggers convergence
 CQG_RATE_HALT=85         # 5h% that triggers convergence (subscription)
 CQG_LANG=en              # en | zh
 CQG_MAX_AGE=60           # ignore snapshots older than N seconds
+CQG_LOG=$HOME/.claude/quota-guard.log   # structured log path; set empty to disable
+CQG_LOG_MAX=102400       # rotate log to .log.1 after this many bytes (100 KB)
 ```
+
+Every invocation appends one line to the log:
+
+```
+2026-06-06T05:26:13 sess=abc123 snap=session ctx=80 5h=28 → CTX-NOTICE
+2026-06-06T05:26:37 sess=?      snap=missing             → exit
+```
+
+Fields: timestamp · `sess` (session ID, `?` when absent) · `snap` (`session` = per-session file, `global` = shared fallback) · `ctx`/`5h` values · decision reached.
 
 ---
 
