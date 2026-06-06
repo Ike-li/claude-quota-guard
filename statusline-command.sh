@@ -233,7 +233,12 @@ if nonnull "$cache_read"; then
   cur_api="${api_duration_ms:-0}"
   prev_api=$(cat "$act_stamp" 2>/dev/null || echo "")
   [ "$cur_api" != "$prev_api" ] && printf '%s' "$cur_api" >"$act_stamp"   # api call -> bump mtime to now
-  warm_mtime=$(stat -f %m "$act_stamp" 2>/dev/null || stat -c %Y "$act_stamp" 2>/dev/null || echo 0)
+  # stat format differs: Linux uses -c, BSD/macOS uses -f
+  if stat -c %Y "$act_stamp" >/dev/null 2>&1; then
+    warm_mtime=$(stat -c %Y "$act_stamp" 2>/dev/null || echo 0)
+  else
+    warm_mtime=$(stat -f %m "$act_stamp" 2>/dev/null || echo 0)
+  fi
   if [ "$warm_mtime" -gt 0 ] 2>/dev/null; then
     ttl_remain=$(( 300 - ($(date +%s) - warm_mtime) ))
     if [ "$ttl_remain" -gt 0 ]; then
