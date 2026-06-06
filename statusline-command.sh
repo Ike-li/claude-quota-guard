@@ -229,12 +229,7 @@ if nonnull "$cache_read"; then
   cur_api="${api_duration_ms:-0}"
   prev_api=$(cat "$act_stamp" 2>/dev/null || echo "")
   [ "$cur_api" != "$prev_api" ] && printf '%s' "$cur_api" >"$act_stamp"   # api call -> bump mtime to now
-  # stat format differs: Linux uses -c, BSD/macOS uses -f
-  if stat -c %Y "$act_stamp" >/dev/null 2>&1; then
-    warm_mtime=$(stat -c %Y "$act_stamp" 2>/dev/null || echo 0)
-  else
-    warm_mtime=$(stat -f %m "$act_stamp" 2>/dev/null || echo 0)
-  fi
+  warm_mtime=$(cqg_stat_mtime "$act_stamp")
   if [ "$warm_mtime" -gt 0 ] 2>/dev/null; then
     ttl_remain=$(( 300 - ($(date +%s) - warm_mtime) ))
     if [ "$ttl_remain" -gt 0 ]; then
@@ -262,7 +257,8 @@ if nonnull "$five_h"; then
   if nonnull "$five_h_reset"; then
     five_proj=$(awk -v used="$five_h" -v reset="$five_h_reset" -v now="$(date +%s)" -v win="$CQG_FIVE_HOUR_WINDOW" 'BEGIN {
       remain = reset - now; elapsed = win - remain;
-      if (elapsed < 300 || used <= 0) exit;       # too early / nothing used yet
+      # Guard against negative elapsed (clock skew, corrupted timestamp)
+      if (elapsed <= 0 || elapsed < 300 || used <= 0) exit;
       p = used * win / elapsed;
       if (p > 999) p = 999;
       printf "%.0f", p;
@@ -277,7 +273,7 @@ if nonnull "$five_h" || nonnull "$seven_d"; then
   usage_stamp="${TMPDIR:-/tmp}/claude-usage-log-stamp"
   log_age=99999
   if [ -f "$usage_stamp" ]; then
-    stamp_mtime=$(stat -f %m "$usage_stamp" 2>/dev/null || stat -c %Y "$usage_stamp" 2>/dev/null || echo 0)
+    stamp_mtime=$(cqg_stat_mtime "$usage_stamp")
     log_age=$(($(date +%s) - stamp_mtime))
   fi
   if [ "$log_age" -ge 300 ]; then
@@ -297,8 +293,10 @@ fi
 
 # ---- current quota snapshot (unthrottled, for the convergence hook) ----
 # Delegates to shared lib/snapshot.sh to ensure consistency with collect.sh.
-CQG_SNAPSHOT="$HOME/.claude/.quota-now"
-cqg_write_snapshot "${five_int:-}" "${seven_int:-}" "${five_proj:-}" "${five_reset:-}" "${seven_reset:-}" "${used_int:-}" "$session_id"
+: "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
+cqg_write_snapshot "${five_int:-}" "${seven_int:-}" "${five_proj:-}" "${five_reset:-}" "${seven_reset:-}" "${used_int:-}" "$session_id" || {
+  printf 'Warning: Failed to write quota snapshot\n' >&2
+}
 
 # ================= line 1: live status =================
 # group: location (project + branch)

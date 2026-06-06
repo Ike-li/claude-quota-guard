@@ -62,7 +62,8 @@ five_proj=""
 if [[ -n "$five_int" && -n "$five_reset_at" ]]; then
   five_proj="$(awk -v used="$five_int" -v reset="$five_reset_at" -v now="$(date +%s)" -v win="$CQG_FIVE_HOUR_WINDOW" 'BEGIN {
     remain = reset - now; elapsed = win - remain;
-    if (elapsed < 300 || used <= 0) exit;
+    # Guard against negative elapsed (clock skew, corrupted timestamp)
+    if (elapsed <= 0 || elapsed < 300 || used <= 0) exit;
     p = used * win / elapsed; if (p > 999) p = 999;
     printf "%.0f", p;
   }')"
@@ -85,7 +86,9 @@ five_reset="$(delta "$five_reset_at")"
 seven_reset="$(delta "$seven_reset_at")"
 
 # ── write snapshot (delegates to shared lib) ───────────────────────────
-cqg_write_snapshot "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" "$session_id"
+cqg_write_snapshot "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" "$session_id" || {
+  printf 'Warning: Failed to write quota snapshot\n' >&2
+}
 
 # ── render the status line ─────────────────────────────────────────────
 if [[ -n "$CQG_WRAPPED_STATUSLINE" ]]; then

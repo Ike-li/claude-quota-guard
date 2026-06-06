@@ -14,11 +14,14 @@
 
 set -euo pipefail
 
-# ── locate & load config ───────────────────────────────────────────────
+# ── locate & load config + shared lib ─────────────────────────────────
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 # shellcheck disable=SC1090
 [[ -f "$CONFIG" ]] && . "$CONFIG"
+# Load shared library for stat helpers
+# shellcheck disable=SC1091
+. "$SELF_DIR/../lib/snapshot.sh"
 : "${CQG_CTX_NOTICE:=50}"; : "${CQG_CTX_HALT:=85}"
 : "${CQG_RATE_HALT:=85}"
 : "${CQG_LANG:=en}";       : "${CQG_MAX_AGE:=60}"
@@ -31,13 +34,8 @@ CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 _log() {
   [ -z "${CQG_LOG:-}" ] && return 0
   printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" >>"$CQG_LOG" 2>/dev/null || true
-  local sz=0
-  # stat format differs: Linux uses -c, BSD/macOS uses -f
-  if stat -c%s "$CQG_LOG" >/dev/null 2>&1; then
-    sz="$(stat -c%s "$CQG_LOG" 2>/dev/null || echo 0)"
-  else
-    sz="$(stat -f%z "$CQG_LOG" 2>/dev/null || echo 0)"
-  fi
+  local sz
+  sz="$(cqg_stat_size "$CQG_LOG")"
   if (( sz > CQG_LOG_MAX )); then mv "$CQG_LOG" "${CQG_LOG}.1" 2>/dev/null || true; fi
 }
 
@@ -64,12 +62,7 @@ if ! [[ -f "$CQG_SNAPSHOT" && -s "$CQG_SNAPSHOT" ]]; then
   exit 0
 fi
 now="$(date +%s)"
-# stat format flags differ: macOS uses -f, Linux uses -c
-if stat -c %Y "$CQG_SNAPSHOT" >/dev/null 2>&1; then
-  mtime="$(stat -c %Y "$CQG_SNAPSHOT" 2>/dev/null || echo 0)"
-else
-  mtime="$(stat -f %m "$CQG_SNAPSHOT" 2>/dev/null || echo 0)"
-fi
+mtime="$(cqg_stat_mtime "$CQG_SNAPSHOT")"
 if (( now - mtime > CQG_MAX_AGE )); then
   _log "sess=${_session_id:-?} snap=${_snap_label} stale(age=$((now - mtime))s) → exit"
   exit 0
