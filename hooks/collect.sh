@@ -19,8 +19,8 @@ set -euo pipefail
 # ── locate & load config + shared lib ──────────────────────────────────
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
-[[ -f "$CONFIG" ]] && # shellcheck disable=SC1090
-  . "$CONFIG"
+# shellcheck disable=SC1090
+[[ -f "$CONFIG" ]] && . "$CONFIG"
 # defaults if config missing
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_WRAPPED_STATUSLINE:=}"

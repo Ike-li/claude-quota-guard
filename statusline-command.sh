@@ -15,9 +15,7 @@ PEACH="\033[38;2;250;179;135m"
 YELLOW="\033[38;2;249;226;175m"
 GREEN="\033[38;2;166;227;161m"
 SAPPHIRE="\033[38;2;116;199;236m"
-LAVENDER="\033[38;2;180;190;254m"
 MAUVE="\033[38;2;203;166;247m"
-TEAL="\033[38;2;148;226;213m"
 SKY="\033[38;2;137;220;235m"
 ROSE="\033[38;2;245;194;231m"
 GOLD="\033[38;2;249;226;175m"
@@ -126,11 +124,9 @@ repo_owner=$(jqr '.workspace.repo.owner // empty')
 repo_name=$(jqr '.workspace.repo.name // empty')
 
 used=$(jqr '.context_window.used_percentage // empty')
-remaining=$(jqr '.context_window.remaining_percentage // empty')
 window_size=$(jqr '.context_window.context_window_size // empty')
 total_input=$(jqr '.context_window.total_input_tokens // empty')
 input_tokens=$(jqr '.context_window.current_usage.input_tokens // empty')
-output_tokens=$(jqr '.context_window.current_usage.output_tokens // empty')
 cache_create=$(jqr '.context_window.current_usage.cache_creation_input_tokens // empty')
 cache_read=$(jqr '.context_window.current_usage.cache_read_input_tokens // empty')
 exceeds_200k=$(jqr '.exceeds_200k_tokens // empty')
@@ -373,7 +369,7 @@ nonnull "$agent_name" && agent_detail="agent ${agent_name}"
 vim_detail=""
 nonnull "$vim_mode" && vim_detail="vim ${vim_mode}"
 session_detail=""
-nonnull "$session_name" && session_detail="“${session_name}”"
+nonnull "$session_name" && session_detail="${session_name}"
 
 line2=$(
   join_segments \

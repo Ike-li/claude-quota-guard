@@ -17,8 +17,8 @@ set -euo pipefail
 # ── locate & load config ───────────────────────────────────────────────
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
-[[ -f "$CONFIG" ]] && # shellcheck disable=SC1090
-  . "$CONFIG"
+# shellcheck disable=SC1090
+[[ -f "$CONFIG" ]] && . "$CONFIG"
 : "${CQG_CTX_NOTICE:=50}"; : "${CQG_CTX_HALT:=85}"
 : "${CQG_RATE_HALT:=85}"
 : "${CQG_LANG:=en}";       : "${CQG_MAX_AGE:=60}"

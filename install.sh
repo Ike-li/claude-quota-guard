@@ -70,7 +70,11 @@ if [[ -n "$existing_sl" && "$existing_sl" != *"collect.sh"* ]]; then
   fi
   [[ "$mode" == "wrap" ]] && wrap_cmd="$existing_sl"
 fi
-[[ -n "$wrap_cmd" ]] && say "→ Wrapping existing status line." || say "→ Standalone status line."
+if [[ -n "$wrap_cmd" ]]; then
+  say "→ Wrapping existing status line."
+else
+  say "→ Standalone status line."
+fi
 
 # persist wrapped command into config.sh safely (via jq to avoid shell metachar issues)
 wrap_json="$SELF_DIR/.cqg-wrap.json"

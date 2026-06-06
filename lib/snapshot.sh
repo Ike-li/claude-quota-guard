@@ -5,6 +5,7 @@
 
 # Anthropic's 5-hour rate-limit window in seconds (5 * 3600 = 18000).
 # If Anthropic changes the window size, update here only.
+# shellcheck disable=SC2034  # used by scripts that source this file
 readonly CQG_FIVE_HOUR_WINDOW=18000
 
 # Sanitize session_id for safe use in filenames.
@@ -28,7 +29,12 @@ cqg_write_snapshot() {
 
   _cqg_write_file() {
     local dest="$1" tmp
-    tmp="$(mktemp "${dest}.XXXXXX" 2>/dev/null || echo "${dest}.tmp")"
+    tmp="$(mktemp "${dest}.XXXXXX" 2>/dev/null)" || {
+      # If mktemp fails (e.g., no write permission), write directly.
+      # This is less safe but ensures the guard hook still works.
+      printf '%s\n' "$snap_line" > "$dest" 2>/dev/null || true
+      return
+    }
     printf '%s\n' "$snap_line" > "$tmp"
     mv -f "$tmp" "$dest"
   }
