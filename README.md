@@ -83,6 +83,23 @@ output. Your display is unchanged; data collection happens transparently.
 
 If you have no status line, it installs a minimal one (`ctx N% · 5h N% · 7d N%`).
 
+### Rich status line (the author's own)
+
+This repo also ships **`statusline-command.sh`** — a self-contained two-line bar
+(Catppuccin Mocha) showing `ctx · cache% · cache-TTL countdown · 5h/7d (reset +
+burn projection) · cost · tokens · git`. It writes the same `.quota-now` snapshot
+`guard.sh` reads, so it covers *both* the display and `collect.sh`'s job in one
+script. Point your `statusLine` at it for the full bar:
+
+```jsonc
+// ~/.claude/settings.json
+"statusLine": { "type": "command", "command": "bash ~/.claude/statusline-command.sh", "refreshInterval": 10 }
+```
+
+The `cache-TTL countdown` (`⏳4m10s` → `❄cold`) estimates how long the 5-minute
+prompt cache stays warm — it resets on each API call and ticks down (floored to
+the `refreshInterval`) while idle.
+
 ---
 
 ## Configure
