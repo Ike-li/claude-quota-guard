@@ -72,9 +72,16 @@ if [[ -n "$existing_sl" && "$existing_sl" != *"collect.sh"* ]]; then
 fi
 [[ -n "$wrap_cmd" ]] && say "→ Wrapping existing status line." || say "→ Standalone status line."
 
-# persist wrapped command into config.sh (escaped)
-esc_wrap="$(printf '%s' "$wrap_cmd" | sed 's/[\/&]/\\&/g')"
-sed -i.bak "s/CQG_WRAPPED_STATUSLINE:=.*}/CQG_WRAPPED_STATUSLINE:=$esc_wrap}/" "$CONFIG" && rm -f "$CONFIG.bak"
+# persist wrapped command into config.sh safely (via jq to avoid shell metachar issues)
+wrap_json="$SELF_DIR/.cqg-wrap.json"
+jq -n --arg cmd "$wrap_cmd" '{wrapped: $cmd}' > "$wrap_json"
+# update config.sh to source the JSON-escaped value
+if ! grep -q "CQG_WRAPPED_STATUSLINE=" "$CONFIG" 2>/dev/null; then
+  cat >> "$CONFIG" <<'EOF'
+# Wrapped statusLine command (if wrap mode was chosen during install)
+CQG_WRAPPED_STATUSLINE="$(jq -r '.wrapped // ""' "$(dirname "${BASH_SOURCE[0]}")/.cqg-wrap.json" 2>/dev/null || true)"
+EOF
+fi
 
 # ── 5. write settings.json with jq (idempotent) ────────────────────────
 collect="bash $SELF_DIR/hooks/collect.sh"

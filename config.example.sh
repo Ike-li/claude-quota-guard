@@ -24,4 +24,7 @@
 # ── Wrapped status line (set by installer in wrap mode) ────────────────
 # If set, collect.sh forwards stdin to this command and prints its output,
 # so your existing status line keeps working. Empty = standalone mode.
-: "${CQG_WRAPPED_STATUSLINE:=}"
+# The installer writes this dynamically, loading from .cqg-wrap.json to avoid
+# shell metacharacter escaping issues. Manual override: set CQG_WRAPPED_STATUSLINE
+# in your environment or uncomment and edit the line below.
+# : "${CQG_WRAPPED_STATUSLINE:=}"

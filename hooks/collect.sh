@@ -28,12 +28,11 @@ CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 # ── read stdin once (JSON), keep a copy to forward in wrap mode ─────────
 input="$(cat)"
 
-# ── extract fields (jq if available, else grep/sed fallback) ───────────
+# ── extract fields (requires jq) ───────────────────────────────────────
 extract() {
-  # $1 = jq path expression
-  if command -v jq >/dev/null 2>&1; then
-    printf '%s' "$input" | jq -r "$1 // empty" 2>/dev/null
-  fi
+  # $1 = jq path expression; returns empty string if jq unavailable
+  command -v jq >/dev/null 2>&1 || return 0
+  printf '%s' "$input" | jq -r "$1 // empty" 2>/dev/null
 }
 
 five_h="$(extract '.rate_limits.five_hour.used_percentage')"
@@ -99,6 +98,8 @@ write_snap "$CQG_SNAPSHOT"
 # ── render the status line ─────────────────────────────────────────────
 if [[ -n "$CQG_WRAPPED_STATUSLINE" ]]; then
   # wrap mode: replay original stdin to the user's status line, print its output
+  # CQG_WRAPPED_STATUSLINE comes from config.sh (written by install script);
+  # trust boundary: user's own config only, not external input.
   printf '%s' "$input" | eval "$CQG_WRAPPED_STATUSLINE"
 else
   # standalone mode: minimal one-liner
