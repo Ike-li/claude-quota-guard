@@ -2,6 +2,11 @@
 # Claude Code statusLine command
 # Style: Starship + Catppuccin Mocha inspired. Human-friendly, two lines.
 
+# Source shared snapshot logic
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib/snapshot.sh"
+
 input=$(cat)
 
 # Catppuccin Mocha colors.
@@ -113,7 +118,7 @@ cwd=$(jqr '.workspace.current_dir // .cwd // empty')
 [ -n "$cwd" ] || cwd="$PWD"
 model=$(jqr '.model.display_name // .model.id // empty')
 session_id=$(jqr '.session_id // empty')
-session_id=$(printf '%s' "$session_id" | tr -cd 'A-Za-z0-9_.-')   # sanitize for filename use
+session_id=$(cqg_sanitize_session_id "$session_id")
 session_name=$(jqr '.session_name // empty')
 version=$(jqr '.version // empty')
 output_style=$(jqr '.output_style.name // empty')
@@ -290,14 +295,9 @@ if nonnull "$seven_d"; then
 fi
 
 # ---- current quota snapshot (unthrottled, for the convergence hook) ----
-# Written AFTER seven_int/seven_reset are defined so all 6 fields are populated.
-# Also writes a per-session file (.quota-now-<session_id>) so multiple concurrent
-# sessions don't overwrite each other's ctx values. Field order:
-#   5h%  7d%  5h_proj%  5h_reset  7d_reset  ctx%
-_snap_line=$(printf '%s\t%s\t%s\t%s\t%s\t%s' \
-  "${five_int:-}" "${seven_int:-}" "${five_proj:-}" "${five_reset:-}" "${seven_reset:-}" "${used_int:-}")
-printf '%s\n' "$_snap_line" >"$HOME/.claude/.quota-now"
-[ -n "$session_id" ] && printf '%s\n' "$_snap_line" >"$HOME/.claude/.quota-now-${session_id}"
+# Delegates to shared lib/snapshot.sh to ensure consistency with collect.sh.
+CQG_SNAPSHOT="$HOME/.claude/.quota-now"
+cqg_write_snapshot "${five_int:-}" "${seven_int:-}" "${five_proj:-}" "${five_reset:-}" "${seven_reset:-}" "${used_int:-}" "$session_id"
 
 # ================= line 1: live status =================
 # group: location (project + branch)

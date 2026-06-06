@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-# ── locate & load config ───────────────────────────────────────────────
+# ── locate & load config + shared lib ──────────────────────────────────
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 [[ -f "$CONFIG" ]] && # shellcheck disable=SC1090
@@ -24,6 +24,10 @@ CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 # defaults if config missing
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_WRAPPED_STATUSLINE:=}"
+
+# Source shared snapshot logic
+# shellcheck disable=SC1091
+. "$SELF_DIR/../lib/snapshot.sh"
 
 # ── read stdin once (JSON), keep a copy to forward in wrap mode ─────────
 input="$(cat)"
@@ -44,7 +48,7 @@ ctx="$(extract '.context_window.used_percentage')"
 # session id (sanitized for filename use) — lets us write a per-session
 # snapshot so concurrent sessions don't clobber each other's ctx value.
 session_id="$(extract '.session_id')"
-session_id="$(printf '%s' "$session_id" | tr -cd 'A-Za-z0-9_.-')"
+session_id="$(cqg_sanitize_session_id "$session_id")"
 
 # round percentages to integers
 intify() { case "$1" in ''|null) echo "" ;; *) printf '%.0f' "$1" 2>/dev/null || echo "" ;; esac; }
@@ -80,20 +84,8 @@ delta() {
 five_reset="$(delta "$five_reset_at")"
 seven_reset="$(delta "$seven_reset_at")"
 
-# ── write snapshot atomically (global + per-session) ───────────────────
-# The per-session file (.quota-now-<id>) lets guard.sh read THIS session's
-# ctx even when multiple sessions run concurrently and clobber the global one.
-# guard.sh prefers the per-session file and falls back to the global one.
-snap_line="$(printf '%s\t%s\t%s\t%s\t%s\t%s' \
-  "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int")"
-write_snap() {
-  local dest="$1" tmp
-  tmp="$(mktemp "${dest}.XXXXXX" 2>/dev/null || echo "${dest}.tmp")"
-  printf '%s\n' "$snap_line" > "$tmp"
-  mv -f "$tmp" "$dest"
-}
-write_snap "$CQG_SNAPSHOT"
-[[ -n "$session_id" ]] && write_snap "${CQG_SNAPSHOT}-${session_id}"
+# ── write snapshot (delegates to shared lib) ───────────────────────────
+cqg_write_snapshot "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" "$session_id"
 
 # ── render the status line ─────────────────────────────────────────────
 if [[ -n "$CQG_WRAPPED_STATUSLINE" ]]; then
