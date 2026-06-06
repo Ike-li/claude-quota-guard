@@ -24,25 +24,46 @@ CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 : "${CQG_LANG:=en}";       : "${CQG_MAX_AGE:=60}"
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_NOTICE_STAMP:=$HOME/.claude/.cqg-notice-stamp}"
+: "${CQG_LOG:=$HOME/.claude/quota-guard.log}"
+: "${CQG_LOG_MAX:=102400}"   # 100 KB before rotation
 
-# parse session_id from hook JSON; prefer per-session snapshot/stamp so
+# ── logging (single-line structured; rotate at CQG_LOG_MAX) ───────────
+_log() {
+  [ -z "${CQG_LOG:-}" ] && return 0
+  printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" >>"$CQG_LOG" 2>/dev/null || true
+  local sz=0
+  sz="$(stat -f%z "$CQG_LOG" 2>/dev/null || stat -c%s "$CQG_LOG" 2>/dev/null || echo 0)"
+  if (( sz > CQG_LOG_MAX )); then mv "$CQG_LOG" "${CQG_LOG}.1" 2>/dev/null || true; fi
+}
+
+# ── parse session_id from hook JSON; prefer per-session snapshot/stamp ─
 # concurrent sessions don't overwrite each other's ctx values
 _hook_json="$(cat 2>/dev/null || true)"
 _session_id=""
 if command -v jq >/dev/null 2>&1; then
   _session_id="$(printf '%s' "$_hook_json" | jq -r '.session_id // .sessionId // empty' 2>/dev/null || true)"
 fi
+_snap_label="global"
 if [ -n "$_session_id" ]; then
   _sess_snap="${CQG_SNAPSHOT}-${_session_id}"
-  [ -f "$_sess_snap" ] && CQG_SNAPSHOT="$_sess_snap"
+  if [ -f "$_sess_snap" ]; then
+    CQG_SNAPSHOT="$_sess_snap"
+    _snap_label="session"
+  fi
   CQG_NOTICE_STAMP="${CQG_NOTICE_STAMP}-${_session_id}"
 fi
 
 # ── snapshot must exist, be non-empty, and be fresh ────────────────────
-[[ -f "$CQG_SNAPSHOT" && -s "$CQG_SNAPSHOT" ]] || exit 0
+if ! [[ -f "$CQG_SNAPSHOT" && -s "$CQG_SNAPSHOT" ]]; then
+  _log "sess=${_session_id:-?} snap=missing → exit"
+  exit 0
+fi
 now="$(date +%s)"
 mtime="$(stat -f %m "$CQG_SNAPSHOT" 2>/dev/null || stat -c %Y "$CQG_SNAPSHOT" 2>/dev/null || echo 0)"
-(( now - mtime > CQG_MAX_AGE )) && exit 0
+if (( now - mtime > CQG_MAX_AGE )); then
+  _log "sess=${_session_id:-?} snap=${_snap_label} stale(age=$((now - mtime))s) → exit"
+  exit 0
+fi
 
 # ── parse fields (awk -F tab is robust to empty fields; read collapses them) ──
 f() { awk -F'\t' -v c="$1" 'NR==1{print $c}' "$CQG_SNAPSHOT"; }
@@ -51,6 +72,9 @@ five_reset="$(f 4)"; ctx="$(f 6)"
 
 num() { case "$1" in ''|*[!0-9.]*) echo 0 ;; *) echo "$1" ;; esac; }
 usage_5h="$(num "$usage_5h")"; proj_5h="$(num "$proj_5h")"; ctx="$(num "$ctx")"
+
+# log prefix shared by all remaining decision points
+_lp="sess=${_session_id:-?} snap=${_snap_label} ctx=${ctx} 5h=${usage_5h}"
 
 ge() { (( $(echo "$1 >= $2" | bc -l) )); }
 
@@ -91,6 +115,10 @@ fi
 # ── HALT tier: [QUOTA-LOW] ─────────────────────────────────────────────
 if [[ "$quota_trigger" == "true" || "$ctx_trigger" == "true" ]]; then
   : > "$CQG_NOTICE_STAMP"   # reset notice dedup so a later drop re-notices
+  _reason=""
+  [[ "$ctx_trigger"   == "true" ]] && _reason="${_reason}ctx"
+  [[ "$quota_trigger" == "true" ]] && _reason="${_reason:+$_reason+}5h"
+  _log "$_lp → QUOTA-LOW(${_reason})"
   echo "---"; echo "$L_HALT_HDR"; echo ""; echo "$L_STATE"
   [[ "$ctx_trigger" == "true" ]] && echo "$L_CTX"
   if [[ "$quota_trigger" == "true" ]]; then
@@ -104,11 +132,15 @@ fi
 if ge "$ctx" "$CQG_CTX_NOTICE"; then
   if [[ ! -f "$CQG_NOTICE_STAMP" ]]; then
     : > "$CQG_NOTICE_STAMP"
+    _log "$_lp → CTX-NOTICE"
     echo "---"; echo "$L_NOTICE"; echo "$L_NOTICE2"; echo "---"
+  else
+    _log "$_lp → silent(dedup)"
   fi
   exit 0
 fi
 
 # ── below notice threshold: clear stamp so next crossing re-notices ────
 rm -f "$CQG_NOTICE_STAMP" 2>/dev/null || true
+_log "$_lp → silent(ctx<${CQG_CTX_NOTICE})"
 exit 0
