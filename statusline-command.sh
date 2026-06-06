@@ -264,14 +264,6 @@ if nonnull "$five_h"; then
   fi
 fi
 
-# ---- current quota snapshot (unthrottled, for the convergence hook) ----
-# Always write a snapshot so the ctx field is available even on API/relay mode
-# (where five_h/seven_d are absent). Field order:
-#   5h%  7d%  5h_proj%  5h_reset  7d_reset  ctx%
-printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-  "${five_int:-}" "${seven_int:-}" "${five_proj:-}" "${five_reset:-}" "${seven_reset:-}" "${used_int:-}" \
-  >"$HOME/.claude/.quota-now"
-
 # ---- usage history log (throttled to once / 5 min) ----
 if nonnull "$five_h" || nonnull "$seven_d"; then
   usage_log="$HOME/.claude/usage-log.tsv"
@@ -295,6 +287,16 @@ if nonnull "$seven_d"; then
   seven_render="$(tier_color "$seven_int" high_bad)7d ${seven_int}%${seven_reset:+ ↻${seven_reset}}${RESET}"
   rate_render="${rate_render:+$rate_render${DIM} · ${RESET}}${seven_render}"
 fi
+
+# ---- current quota snapshot (unthrottled, for the convergence hook) ----
+# Written AFTER seven_int/seven_reset are defined so all 6 fields are populated.
+# Also writes a per-session file (.quota-now-<session_id>) so multiple concurrent
+# sessions don't overwrite each other's ctx values. Field order:
+#   5h%  7d%  5h_proj%  5h_reset  7d_reset  ctx%
+_snap_line=$(printf '%s\t%s\t%s\t%s\t%s\t%s' \
+  "${five_int:-}" "${seven_int:-}" "${five_proj:-}" "${five_reset:-}" "${seven_reset:-}" "${used_int:-}")
+printf '%s\n' "$_snap_line" >"$HOME/.claude/.quota-now"
+[ -n "$session_id" ] && printf '%s\n' "$_snap_line" >"$HOME/.claude/.quota-now-${session_id}"
 
 # ================= line 1: live status =================
 # group: location (project + branch)

@@ -25,8 +25,18 @@ CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_NOTICE_STAMP:=$HOME/.claude/.cqg-notice-stamp}"
 
-# drain any hook JSON on stdin (we don't need it)
-cat >/dev/null 2>&1 || true
+# parse session_id from hook JSON; prefer per-session snapshot/stamp so
+# concurrent sessions don't overwrite each other's ctx values
+_hook_json="$(cat 2>/dev/null || true)"
+_session_id=""
+if command -v jq >/dev/null 2>&1; then
+  _session_id="$(printf '%s' "$_hook_json" | jq -r '.session_id // .sessionId // empty' 2>/dev/null || true)"
+fi
+if [ -n "$_session_id" ]; then
+  _sess_snap="${CQG_SNAPSHOT}-${_session_id}"
+  [ -f "$_sess_snap" ] && CQG_SNAPSHOT="$_sess_snap"
+  CQG_NOTICE_STAMP="${CQG_NOTICE_STAMP}-${_session_id}"
+fi
 
 # ── snapshot must exist, be non-empty, and be fresh ────────────────────
 [[ -f "$CQG_SNAPSHOT" && -s "$CQG_SNAPSHOT" ]] || exit 0
