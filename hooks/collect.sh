@@ -42,6 +42,11 @@ seven_d="$(extract '.rate_limits.seven_day.used_percentage')"
 seven_reset_at="$(extract '.rate_limits.seven_day.resets_at')"
 ctx="$(extract '.context_window.used_percentage')"
 
+# session id (sanitized for filename use) — lets us write a per-session
+# snapshot so concurrent sessions don't clobber each other's ctx value.
+session_id="$(extract '.session_id')"
+session_id="$(printf '%s' "$session_id" | tr -cd 'A-Za-z0-9_.-')"
+
 # round percentages to integers
 intify() { case "$1" in ''|null) echo "" ;; *) printf '%.0f' "$1" 2>/dev/null || echo "" ;; esac; }
 five_int="$(intify "$five_h")"
@@ -76,12 +81,20 @@ delta() {
 five_reset="$(delta "$five_reset_at")"
 seven_reset="$(delta "$seven_reset_at")"
 
-# ── write snapshot atomically ──────────────────────────────────────────
-tmp="$(mktemp "${CQG_SNAPSHOT}.XXXXXX" 2>/dev/null || echo "${CQG_SNAPSHOT}.tmp")"
-printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-  "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" \
-  > "$tmp"
-mv -f "$tmp" "$CQG_SNAPSHOT"
+# ── write snapshot atomically (global + per-session) ───────────────────
+# The per-session file (.quota-now-<id>) lets guard.sh read THIS session's
+# ctx even when multiple sessions run concurrently and clobber the global one.
+# guard.sh prefers the per-session file and falls back to the global one.
+snap_line="$(printf '%s\t%s\t%s\t%s\t%s\t%s' \
+  "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int")"
+write_snap() {
+  local dest="$1" tmp
+  tmp="$(mktemp "${dest}.XXXXXX" 2>/dev/null || echo "${dest}.tmp")"
+  printf '%s\n' "$snap_line" > "$tmp"
+  mv -f "$tmp" "$dest"
+}
+write_snap "$CQG_SNAPSHOT"
+[[ -n "$session_id" ]] && write_snap "${CQG_SNAPSHOT}-${session_id}"
 
 # ── render the status line ─────────────────────────────────────────────
 if [[ -n "$CQG_WRAPPED_STATUSLINE" ]]; then

@@ -71,6 +71,21 @@ rm -f "$STAMP"; snap 0 0 0 - - 90
 touch -t 200001010000 "$SNAP"
 expect "stale snapshot → silent" EMPTY "$(run '')"
 
+echo "== per-session snapshot precedence =="
+rm -f "$STAMP" "${STAMP}-S1"
+snap 0 0 0 - - 30                                  # global: ctx 30 (would be silent)
+printf '0\t0\t0\t-\t-\t90\n' > "${SNAP}-S1"        # session S1: ctx 90 (would converge)
+out="$(CQG_CONFIG="$CFG" ANTHROPIC_BASE_URL='' bash "$GUARD" <<< '{"session_id":"S1"}')"
+expect "guard prefers per-session (ctx90) over global (ctx30)" "QUOTA-LOW" "$out"
+rm -f "${SNAP}-S1" "${STAMP}-S1"
+
+echo "== collect writes per-session snapshot =="
+COLLECT="$SELF_DIR/../hooks/collect.sh"
+csnap="$TMP/csnap"
+echo '{"context_window":{"used_percentage":77},"session_id":"CS1"}' \
+  | CQG_SNAPSHOT="$csnap" CQG_WRAPPED_STATUSLINE="" bash "$COLLECT" >/dev/null 2>&1
+if [[ -f "${csnap}-CS1" ]]; then echo "  ✓ collect wrote per-session file (.quota-now-CS1)"; ((pass++)); else echo "  ✗ collect missing per-session file"; ((fail++)); fi
+
 echo "== i18n =="
 rm -f "$STAMP"; snap 40 9 45 2h 5d 88
 CFG_ZH="$TMP/config.zh.sh"; sed 's/CQG_LANG=en/CQG_LANG=zh/' "$CFG" > "$CFG_ZH"

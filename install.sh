@@ -78,7 +78,10 @@ sed -i.bak "s/CQG_WRAPPED_STATUSLINE:=.*}/CQG_WRAPPED_STATUSLINE:=$esc_wrap}/" "
 
 # ── 5. write settings.json with jq (idempotent) ────────────────────────
 collect="bash $SELF_DIR/hooks/collect.sh"
-guard="bash $SELF_DIR/hooks/guard.sh"
+# The trailing "# claude-quota-guard" is a stable marker: install/uninstall
+# match it to find our hook regardless of where the repo was cloned. (It's a
+# shell comment, so it doesn't affect execution; guard.sh ignores argv.)
+guard="bash $SELF_DIR/hooks/guard.sh # claude-quota-guard"
 
 tmp="$(mktemp)"
 jq --arg collect "$collect" --arg guard "$guard" '

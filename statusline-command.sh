@@ -113,6 +113,7 @@ cwd=$(jqr '.workspace.current_dir // .cwd // empty')
 [ -n "$cwd" ] || cwd="$PWD"
 model=$(jqr '.model.display_name // .model.id // empty')
 session_id=$(jqr '.session_id // empty')
+session_id=$(printf '%s' "$session_id" | tr -cd 'A-Za-z0-9_.-')   # sanitize for filename use
 session_name=$(jqr '.session_name // empty')
 version=$(jqr '.version // empty')
 output_style=$(jqr '.output_style.name // empty')
