@@ -3,6 +3,10 @@
 # Shared logic for writing quota snapshots. Sourced by collect.sh and
 # statusline-command.sh to ensure per-session snapshot handling stays consistent.
 
+# Anthropic's 5-hour rate-limit window in seconds (5 * 3600 = 18000).
+# If Anthropic changes the window size, update here only.
+readonly CQG_FIVE_HOUR_WINDOW=18000
+
 # Sanitize session_id for safe use in filenames.
 # Input: raw session_id string from JSON
 # Output: cleaned string (only alphanumerics, dots, dashes, underscores)

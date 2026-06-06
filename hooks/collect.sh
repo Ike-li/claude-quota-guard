@@ -57,11 +57,11 @@ seven_int="$(intify "$seven_d")"
 ctx_int="$(intify "$ctx")"
 
 # ── 5h projection: at current burn, where we'll land by window reset ────
-# 5h window = 18000s. Only meaningful once enough of the window has elapsed.
+# Only meaningful once enough of the window has elapsed.
 five_proj=""
 if [[ -n "$five_int" && -n "$five_reset_at" ]]; then
-  five_proj="$(awk -v used="$five_int" -v reset="$five_reset_at" -v now="$(date +%s)" 'BEGIN {
-    win = 18000; remain = reset - now; elapsed = win - remain;
+  five_proj="$(awk -v used="$five_int" -v reset="$five_reset_at" -v now="$(date +%s)" -v win="$CQG_FIVE_HOUR_WINDOW" 'BEGIN {
+    remain = reset - now; elapsed = win - remain;
     if (elapsed < 300 || used <= 0) exit;
     p = used * win / elapsed; if (p > 999) p = 999;
     printf "%.0f", p;

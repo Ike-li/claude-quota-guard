@@ -259,8 +259,8 @@ if nonnull "$five_h"; then
   rate_render="$(tier_color "$five_int" high_bad)5h ${five_int}%${five_reset:+ ↻${five_reset}}${RESET}"
   # burn-rate projection: at current pace, what % we'll reach by window reset.
   if nonnull "$five_h_reset"; then
-    five_proj=$(awk -v used="$five_h" -v reset="$five_h_reset" -v now="$(date +%s)" 'BEGIN {
-      win = 18000; remain = reset - now; elapsed = win - remain;
+    five_proj=$(awk -v used="$five_h" -v reset="$five_h_reset" -v now="$(date +%s)" -v win="$CQG_FIVE_HOUR_WINDOW" 'BEGIN {
+      remain = reset - now; elapsed = win - remain;
       if (elapsed < 300 || used <= 0) exit;       # too early / nothing used yet
       p = used * win / elapsed;
       if (p > 999) p = 999;
