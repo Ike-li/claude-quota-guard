@@ -32,7 +32,12 @@ _log() {
   [ -z "${CQG_LOG:-}" ] && return 0
   printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" >>"$CQG_LOG" 2>/dev/null || true
   local sz=0
-  sz="$(stat -f%z "$CQG_LOG" 2>/dev/null || stat -c%s "$CQG_LOG" 2>/dev/null || echo 0)"
+  # stat format differs: Linux uses -c, BSD/macOS uses -f
+  if stat -c%s "$CQG_LOG" >/dev/null 2>&1; then
+    sz="$(stat -c%s "$CQG_LOG" 2>/dev/null || echo 0)"
+  else
+    sz="$(stat -f%z "$CQG_LOG" 2>/dev/null || echo 0)"
+  fi
   if (( sz > CQG_LOG_MAX )); then mv "$CQG_LOG" "${CQG_LOG}.1" 2>/dev/null || true; fi
 }
 
@@ -59,7 +64,12 @@ if ! [[ -f "$CQG_SNAPSHOT" && -s "$CQG_SNAPSHOT" ]]; then
   exit 0
 fi
 now="$(date +%s)"
-mtime="$(stat -f %m "$CQG_SNAPSHOT" 2>/dev/null || stat -c %Y "$CQG_SNAPSHOT" 2>/dev/null || echo 0)"
+# stat format flags differ: macOS uses -f, Linux uses -c
+if stat -c %Y "$CQG_SNAPSHOT" >/dev/null 2>&1; then
+  mtime="$(stat -c %Y "$CQG_SNAPSHOT" 2>/dev/null || echo 0)"
+else
+  mtime="$(stat -f %m "$CQG_SNAPSHOT" 2>/dev/null || echo 0)"
+fi
 if (( now - mtime > CQG_MAX_AGE )); then
   _log "sess=${_session_id:-?} snap=${_snap_label} stale(age=$((now - mtime))s) → exit"
   exit 0
