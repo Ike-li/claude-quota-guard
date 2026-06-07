@@ -18,7 +18,7 @@ err() { printf 'ERROR: %s\n' "$*" >&2; }
 # ── 1. dependency check ────────────────────────────────────────────────
 say "→ Checking dependencies..."
 missing=()
-for c in bash awk bc date stat jq; do
+for c in bash awk date stat jq; do
   command -v "$c" >/dev/null 2>&1 || missing+=("$c")
 done
 if (( ${#missing[@]} )); then

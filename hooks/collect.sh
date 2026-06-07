@@ -33,9 +33,11 @@ CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 input="$(cat)"
 
 # ── extract fields (requires jq) ───────────────────────────────────────
+_HAS_JQ=false
+command -v jq >/dev/null 2>&1 && _HAS_JQ=true
 extract() {
-  # $1 = jq path expression; returns empty string if jq unavailable
-  command -v jq >/dev/null 2>&1 || return 0
+  # $1 = jq path expression; returns empty if jq unavailable or path missing
+  [[ "$_HAS_JQ" == "true" ]] || return 0
   printf '%s' "$input" | jq -r "$1 // empty" 2>/dev/null
 }
 
@@ -56,34 +58,10 @@ five_int="$(intify "$five_h")"
 seven_int="$(intify "$seven_d")"
 ctx_int="$(intify "$ctx")"
 
-# ── 5h projection: at current burn, where we'll land by window reset ────
-# Only meaningful once enough of the window has elapsed.
-five_proj=""
-if [[ -n "$five_int" && -n "$five_reset_at" ]]; then
-  five_proj="$(awk -v used="$five_int" -v reset="$five_reset_at" -v now="$(date +%s)" -v win="$CQG_FIVE_HOUR_WINDOW" 'BEGIN {
-    remain = reset - now; elapsed = win - remain;
-    # Guard against negative elapsed (clock skew, corrupted timestamp)
-    if (elapsed <= 0 || elapsed < 300 || used <= 0) exit;
-    p = used * win / elapsed; if (p > 999) p = 999;
-    printf "%.0f", p;
-  }')"
-fi
-
-# ── human-readable reset deltas ────────────────────────────────────────
-delta() {
-  local epoch="$1" now
-  [[ -n "$epoch" ]] || { echo ""; return; }
-  now="$(date +%s)"
-  awk -v e="$epoch" -v n="$now" 'BEGIN {
-    s = e - n; if (s <= 0) { print "now"; exit }
-    if (s >= 86400) printf "%dd", int(s/86400);
-    else if (s >= 3600) printf "%dh", int(s/3600);
-    else if (s >= 60) printf "%dm", int(s/60);
-    else printf "%ds", s;
-  }'
-}
-five_reset="$(delta "$five_reset_at")"
-seven_reset="$(delta "$seven_reset_at")"
+# ── 5h projection + human-readable reset deltas (delegated to shared lib) ──
+five_proj="$(cqg_five_hour_projection "$five_int" "$five_reset_at")"
+five_reset="$(cqg_fmt_reset_delta "$five_reset_at")"
+seven_reset="$(cqg_fmt_reset_delta "$seven_reset_at")"
 
 # ── write snapshot (delegates to shared lib) ───────────────────────────
 cqg_write_snapshot "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" "$session_id" || {

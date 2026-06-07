@@ -25,10 +25,17 @@ CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 : "${CQG_CTX_NOTICE:=50}"; : "${CQG_CTX_HALT:=85}"
 : "${CQG_RATE_HALT:=85}"
 : "${CQG_LANG:=en}";       : "${CQG_MAX_AGE:=60}"
+: "${CQG_MODE:=auto}"     # auto | subscription | relay
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_NOTICE_STAMP:=$HOME/.claude/.cqg-notice-stamp}"
 : "${CQG_LOG:=$HOME/.claude/quota-guard.log}"
 : "${CQG_LOG_MAX:=102400}"   # 100 KB before rotation
+
+# Round thresholds to integers — ((...)) arithmetic doesn't handle decimals
+# (old ge() used bc -l which did; this keeps backward compatibility)
+CQG_CTX_NOTICE="$(printf '%.0f' "$CQG_CTX_NOTICE" 2>/dev/null || echo 50)"
+CQG_CTX_HALT="$(printf '%.0f' "$CQG_CTX_HALT" 2>/dev/null || echo 85)"
+CQG_RATE_HALT="$(printf '%.0f' "$CQG_RATE_HALT" 2>/dev/null || echo 85)"
 
 # ── logging (single-line structured; rotate at CQG_LOG_MAX) ───────────
 _log() {
@@ -46,6 +53,8 @@ _session_id=""
 if command -v jq >/dev/null 2>&1; then
   _session_id="$(printf '%s' "$_hook_json" | jq -r '.session_id // .sessionId // empty' 2>/dev/null || true)"
 fi
+# Sanitize identically to collect.sh so the per-session snapshot filename matches.
+_session_id="$(cqg_sanitize_session_id "$_session_id")"
 _snap_label="global"
 if [ -n "$_session_id" ]; then
   _sess_snap="${CQG_SNAPSHOT}-${_session_id}"
@@ -68,33 +77,42 @@ if (( now - mtime > CQG_MAX_AGE )); then
   exit 0
 fi
 
-# ── parse fields (awk -F tab is robust to empty fields; read collapses them) ──
-f() { awk -F'\t' -v c="$1" 'NR==1{print $c}' "$CQG_SNAPSHOT"; }
-usage_5h="$(f 1)"; usage_7d="$(f 2)"; proj_5h="$(f 3)"
-five_reset="$(f 4)"; ctx="$(f 6)"
+# ── snapshot field indices (tab-separated, single line) ──────────────────
+_FLD_5H=1; _FLD_7D=2; _FLD_PROJ=3; _FLD_5H_RESET=4; _FLD_7D_RESET=5; _FLD_CTX=6
+_snap_field() { awk -F'\t' -v c="$1" 'NR==1{print $c}' "$CQG_SNAPSHOT"; }
+usage_5h="$(_snap_field $_FLD_5H)"; usage_7d="$(_snap_field $_FLD_7D)"
+proj_5h="$(_snap_field $_FLD_PROJ)"; five_reset="$(_snap_field $_FLD_5H_RESET)"
+ctx="$(_snap_field $_FLD_CTX)"
 
-num() { case "$1" in ''|*[!0-9.]*) echo 0 ;; *) echo "$1" ;; esac; }
-usage_5h="$(num "$usage_5h")"; proj_5h="$(num "$proj_5h")"; ctx="$(num "$ctx")"
+# ── rate-tier gate: active only when snapshot has real rate-limit data ──
+# CQG_MODE: auto (detect from snapshot data) | subscription (force on) | relay (force off)
+# In auto mode, we check whether field 1 (5h%) is non-empty — collect.sh writes
+# empty rate fields on API/relay mode, so this is a reliable discriminator.
+# Must run BEFORE _as_int sanitizes empty→0.
+_rate_available=false
+case "${CQG_MODE:-auto}" in
+  subscription) _rate_available=true ;;
+  relay)       _rate_available=false ;;
+  *)           [[ -n "$usage_5h" ]] && _rate_available=true ;;
+esac
+
+# Coerce to a plain integer safe for ((...)) — strips decimals and rejects
+# anything non-numeric (whitespace, multiple dots, garbage) to 0.
+_as_int() { printf '%.0f' "$1" 2>/dev/null || echo 0; }
+usage_5h="$(_as_int "$usage_5h")"; proj_5h="$(_as_int "$proj_5h")"; ctx="$(_as_int "$ctx")"
 
 # log prefix shared by all remaining decision points
 _lp="sess=${_session_id:-?} snap=${_snap_label} ctx=${ctx} 5h=${usage_5h}"
 
-ge() { (( $(echo "$1 >= $2" | bc -l) )); }
-
-# ── API/relay detection: skip rate-limit tier (no 5h/7d concept) ───────
-base_url="${ANTHROPIC_BASE_URL:-}"
-is_relay=false
-if [[ -n "$base_url" && "$base_url" != *"api.anthropic.com"* ]]; then is_relay=true; fi
-
 # ── evaluate tiers ─────────────────────────────────────────────────────
 quota_trigger=false
-if [[ "$is_relay" == "false" ]]; then
-  if ge "$usage_5h" "$CQG_RATE_HALT"; then
+if [[ "$_rate_available" == "true" ]]; then
+  if (( usage_5h >= CQG_RATE_HALT )); then
     quota_trigger=true
   fi
 fi
 ctx_trigger=false
-ge "$ctx" "$CQG_CTX_HALT" && ctx_trigger=true
+(( ctx >= CQG_CTX_HALT )) && ctx_trigger=true
 
 # ── localized strings ──────────────────────────────────────────────────
 if [[ "$CQG_LANG" == "zh" ]]; then
@@ -132,7 +150,7 @@ if [[ "$quota_trigger" == "true" || "$ctx_trigger" == "true" ]]; then
 fi
 
 # ── NOTICE tier: [CTX-NOTICE] (once per crossing) ──────────────────────
-if ge "$ctx" "$CQG_CTX_NOTICE"; then
+if (( ctx >= CQG_CTX_NOTICE )); then
   if [[ ! -f "$CQG_NOTICE_STAMP" ]]; then
     : > "$CQG_NOTICE_STAMP"
     _log "$_lp → CTX-NOTICE"

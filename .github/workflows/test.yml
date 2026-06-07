@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y bc jq
+        run: sudo apt-get install -y jq
 
       - name: Run guard tests
         run: bash test/test_guard.sh

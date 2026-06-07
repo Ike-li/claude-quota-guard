@@ -105,3 +105,36 @@ cqg_write_snapshot() {
     _cqg_write_file "${CQG_SNAPSHOT}-${session_id}" || return 1
   fi
 }
+
+# ── 5h burn-rate projection ─────────────────────────────────────────────
+# Projects what % of the 5h budget we'll burn by the time the window resets,
+# given current usage and elapsed time. Returns empty if there isn't enough
+# data yet (<5 min elapsed) or inputs are missing/nonsensical.
+# Args: used_pct reset_epoch [now_epoch]
+cqg_five_hour_projection() {
+  local used="$1" reset="$2" now="${3:-$(date +%s)}"
+  [[ -n "$used" && -n "$reset" ]] || return 0
+  awk -v used="$used" -v reset="$reset" -v now="$now" -v win="$CQG_FIVE_HOUR_WINDOW" 'BEGIN {
+    remain = reset - now; elapsed = win - remain;
+    if (elapsed <= 0 || elapsed < 300 || used <= 0) exit;
+    p = used * win / elapsed; if (p > 999) p = 999;
+    printf "%.0f", p;
+  }'
+}
+
+# ── Human-readable reset countdown ──────────────────────────────────────
+# Converts a future epoch into a compact label: "3d", "4h", "12m", "45s",
+# "now" (if the epoch has passed), or empty for missing input.
+# Args: epoch
+cqg_fmt_reset_delta() {
+  local epoch="$1" now
+  [[ -n "$epoch" ]] || return 0
+  now="$(date +%s)"
+  awk -v e="$epoch" -v n="$now" 'BEGIN {
+    s = e - n; if (s <= 0) { print "now"; exit }
+    if (s >= 86400) printf "%dd", int(s/86400);
+    else if (s >= 3600) printf "%dh", int(s/3600);
+    else if (s >= 60) printf "%dm", int(s/60);
+    else printf "%ds", s;
+  }'
+}

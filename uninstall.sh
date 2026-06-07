@@ -49,8 +49,10 @@ if [[ -f "$CLAUDE_MD" ]] && grep -q "BEGIN claude-quota-guard" "$CLAUDE_MD"; the
   say "→ Removed protocol block from CLAUDE.md."
 fi
 
-# clean runtime files
-rm -f "$HOME/.claude/.quota-now" "$HOME/.claude/.cqg-notice-stamp" 2>/dev/null || true
+# clean runtime files (globs cover per-session snapshots/stamps and rotated log)
+rm -f "$HOME/.claude/.quota-now" "$HOME/.claude/.quota-now-"* \
+      "$HOME/.claude/.cqg-notice-stamp" "$HOME/.claude/.cqg-notice-stamp-"* \
+      "$HOME/.claude/quota-guard.log" "$HOME/.claude/quota-guard.log.1" 2>/dev/null || true
 
 say ""
 say "✅ Uninstalled. Restart Claude Code to apply."

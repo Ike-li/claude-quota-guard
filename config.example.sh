@@ -14,6 +14,13 @@
 # ── Language for injected signals: en | zh ─────────────────────────────
 : "${CQG_LANG:=en}"
 
+# ── Rate-tier mode: auto | subscription | relay ────────────────────────
+# auto:         detect from snapshot data (5h field non-empty = subscription).
+#               Fixes the case where ANTHROPIC_BASE_URL leaks from the shell.
+# subscription: always enable rate-limit tier (force 5h/7d checks).
+# relay:        always skip rate-limit tier (API / relay, no budget concept).
+: "${CQG_MODE:=auto}"
+
 # ── Data freshness: snapshots older than this many seconds are ignored ──
 : "${CQG_MAX_AGE:=60}"
 

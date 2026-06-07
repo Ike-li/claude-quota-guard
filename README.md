@@ -56,7 +56,7 @@ way. All thresholds are configurable.
 
 ## Install
 
-Requires: `bash`, `awk`, `bc`, `date`, `stat`, `jq`.
+Requires: `bash`, `awk`, `date`, `stat`, `jq`.
 
 ```bash
 git clone https://github.com/Ike-li/claude-quota-guard
@@ -112,6 +112,7 @@ CQG_CTX_NOTICE=50        # ctx% for the advisory notice
 CQG_CTX_HALT=85          # ctx% that triggers convergence
 CQG_RATE_HALT=85         # 5h% that triggers convergence (subscription)
 CQG_LANG=en              # en | zh
+CQG_MODE=auto            # auto | subscription | relay
 CQG_MAX_AGE=60           # ignore snapshots older than N seconds
 CQG_LOG=$HOME/.claude/quota-guard.log   # structured log path; set empty to disable
 CQG_LOG_MAX=102400       # rotate log to .log.1 after this many bytes (100 KB)
@@ -154,10 +155,13 @@ freshness, i18n, and configurable thresholds. Never touches your real
 
 ## How it detects subscription vs API/relay
 
-`guard.sh` treats `ANTHROPIC_BASE_URL` as the discriminator: unset or pointing at
-`api.anthropic.com` → subscription (rate-limit tier active); anything else →
-API/relay (rate-limit tier skipped, since relays may even fake `rate_limits`).
-The context tier never depends on this and always runs.
+By default (`CQG_MODE=auto`), `guard.sh` checks whether the snapshot contains
+real rate-limit data (non-empty 5h field). `collect.sh` writes empty rate fields
+on API/relay mode, so this is a reliable, zero-config discriminator. No more
+`ANTHROPIC_BASE_URL` leak from your shell environment.
+
+Set `CQG_MODE=subscription` or `CQG_MODE=relay` in `config.sh` to force a
+specific mode. The context tier never depends on mode and always runs.
 
 ---
 

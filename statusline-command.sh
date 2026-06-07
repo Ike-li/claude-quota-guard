@@ -73,23 +73,6 @@ fmt_duration_ms() {
   }'
 }
 
-fmt_reset_delta() {
-  local epoch="$1"
-  nonnull "$epoch" || return 0
-  local now delta
-  now=$(date +%s)
-  delta=$(awk -v e="$epoch" -v n="$now" 'BEGIN { printf "%.0f", e - n }')
-  [ "$delta" -gt 0 ] 2>/dev/null || {
-    printf "now"
-    return 0
-  }
-  awk -v sec="$delta" 'BEGIN {
-    if (sec >= 86400) printf "%dd", int(sec / 86400)
-    else if (sec >= 3600) printf "%dh", int(sec / 3600)
-    else if (sec >= 60) printf "%dm", int(sec / 60)
-    else printf "%ds", sec
-  }'
-}
 
 seg() {
   local color="$1"
@@ -251,18 +234,11 @@ fi
 rate_render=""
 if nonnull "$five_h"; then
   five_int=$(printf "%.0f" "$five_h")
-  five_reset=$(fmt_reset_delta "$five_h_reset")
+  five_reset=$(cqg_fmt_reset_delta "$five_h_reset")
   rate_render="$(tier_color "$five_int" high_bad)5h ${five_int}%${five_reset:+ ↻${five_reset}}${RESET}"
   # burn-rate projection: at current pace, what % we'll reach by window reset.
   if nonnull "$five_h_reset"; then
-    five_proj=$(awk -v used="$five_h" -v reset="$five_h_reset" -v now="$(date +%s)" -v win="$CQG_FIVE_HOUR_WINDOW" 'BEGIN {
-      remain = reset - now; elapsed = win - remain;
-      # Guard against negative elapsed (clock skew, corrupted timestamp)
-      if (elapsed <= 0 || elapsed < 300 || used <= 0) exit;
-      p = used * win / elapsed;
-      if (p > 999) p = 999;
-      printf "%.0f", p;
-    }')
+    five_proj=$(cqg_five_hour_projection "$five_h" "$five_h_reset")
     nonnull "$five_proj" && rate_render="${rate_render} $(tier_color "$five_proj" high_bad)→${five_proj}%${RESET}"
   fi
 fi
@@ -286,7 +262,7 @@ if nonnull "$five_h" || nonnull "$seven_d"; then
 fi
 if nonnull "$seven_d"; then
   seven_int=$(printf "%.0f" "$seven_d")
-  seven_reset=$(fmt_reset_delta "$seven_d_reset")
+  seven_reset=$(cqg_fmt_reset_delta "$seven_d_reset")
   seven_render="$(tier_color "$seven_int" high_bad)7d ${seven_int}%${seven_reset:+ ↻${seven_reset}}${RESET}"
   rate_render="${rate_render:+$rate_render${DIM} · ${RESET}}${seven_render}"
 fi

@@ -24,8 +24,8 @@ EOF
 pass=0; fail=0
 # snap <fields...> : write tab-joined snapshot, fresh mtime
 snap() { local IFS=$'\t'; printf '%s\n' "$*" > "$SNAP"; }
-# run <base_url> : run guard with given config, capture stdout
-run() { CQG_CONFIG="$CFG" ANTHROPIC_BASE_URL="$1" bash "$GUARD" </dev/null; }
+# run <mode> : run guard with given CQG_MODE (default auto)
+run() { CQG_CONFIG="$CFG" CQG_MODE="${1:-auto}" bash "$GUARD" </dev/null; }
 # expect <desc> <needle|EMPTY> <output>
 expect() {
   local desc="$1" needle="$2" out="$3"
@@ -38,44 +38,44 @@ expect() {
 
 echo "== tier + mode matrix =="
 rm -f "$STAMP"; snap 40 9 45 2h 5d 30
-expect "sub: ctx30/5h40 → silent" EMPTY "$(run '')"
+expect "sub: ctx30/5h40 → silent" EMPTY "$(run)"
 
 rm -f "$STAMP"; snap 92 9 110 1h 5d 30
-expect "sub: 5h92 → QUOTA-LOW" "QUOTA-LOW" "$(run '')"
-expect "sub: 5h92 shows 5h line" "5h usage: 92%" "$(run '')"
+expect "sub: 5h92 → QUOTA-LOW" "QUOTA-LOW" "$(run subscription)"
+expect "sub: 5h92 shows 5h line" "5h usage: 92%" "$(run subscription)"
 
 rm -f "$STAMP"; snap 17 12 164 4h 5d 20
-expect "sub: 5h17 + proj164 → silent (proj not a trigger)" EMPTY "$(run '')"
+expect "sub: 5h17 + proj164 → silent (proj not a trigger)" EMPTY "$(run subscription)"
 
 rm -f "$STAMP"; snap 40 9 45 2h 5d 88
-expect "sub: ctx88 → QUOTA-LOW" "QUOTA-LOW" "$(run '')"
+expect "sub: ctx88 → QUOTA-LOW" "QUOTA-LOW" "$(run)"
 
 rm -f "$STAMP"; snap '' '' '' '' '' 90
-expect "relay: ctx90 (empty 5h) → QUOTA-LOW" "QUOTA-LOW" "$(run 'https://relay.example')"
+expect "relay: ctx90 (empty 5h) → QUOTA-LOW" "QUOTA-LOW" "$(run relay)"
 
 rm -f "$STAMP"; snap 99 99 150 1h 5d 20
-expect "relay: fake 5h99/ctx20 → silent (rate ignored)" EMPTY "$(run 'https://relay.example')"
+expect "relay: fake 5h99/ctx20 → silent (rate ignored)" EMPTY "$(run relay)"
 
 echo "== notice tier + dedup =="
 rm -f "$STAMP"; snap 0 0 0 - - 60
-expect "ctx60 first → CTX-NOTICE" "CTX-NOTICE" "$(run '')"
-expect "ctx60 again → silent (dedup)" EMPTY "$(run '')"
+expect "ctx60 first → CTX-NOTICE" "CTX-NOTICE" "$(run)"
+expect "ctx60 again → silent (dedup)" EMPTY "$(run)"
 
 snap 0 0 0 - - 30
-expect "ctx30 → silent (clears stamp)" EMPTY "$(run '')"
+expect "ctx30 → silent (clears stamp)" EMPTY "$(run)"
 snap 0 0 0 - - 60
-expect "ctx60 re-cross → CTX-NOTICE again" "CTX-NOTICE" "$(run '')"
+expect "ctx60 re-cross → CTX-NOTICE again" "CTX-NOTICE" "$(run)"
 
 echo "== freshness =="
 rm -f "$STAMP"; snap 0 0 0 - - 90
 touch -t 200001010000 "$SNAP"
-expect "stale snapshot → silent" EMPTY "$(run '')"
+expect "stale snapshot → silent" EMPTY "$(run)"
 
 echo "== per-session snapshot precedence =="
 rm -f "$STAMP" "${STAMP}-S1"
 snap 0 0 0 - - 30                                  # global: ctx 30 (would be silent)
 printf '0\t0\t0\t-\t-\t90\n' > "${SNAP}-S1"        # session S1: ctx 90 (would converge)
-out="$(CQG_CONFIG="$CFG" ANTHROPIC_BASE_URL='' bash "$GUARD" <<< '{"session_id":"S1"}')"
+out="$(CQG_CONFIG="$CFG" bash "$GUARD" <<< '{"session_id":"S1"}')"
 expect "guard prefers per-session (ctx90) over global (ctx30)" "QUOTA-LOW" "$out"
 rm -f "${SNAP}-S1" "${STAMP}-S1"
 
@@ -89,14 +89,24 @@ if [[ -f "${csnap}-CS1" ]]; then echo "  ✓ collect wrote per-session file (.qu
 echo "== i18n =="
 rm -f "$STAMP"; snap 40 9 45 2h 5d 88
 CFG_ZH="$TMP/config.zh.sh"; sed 's/CQG_LANG=en/CQG_LANG=zh/' "$CFG" > "$CFG_ZH"
-out="$(CQG_CONFIG="$CFG_ZH" ANTHROPIC_BASE_URL='' bash "$GUARD" </dev/null)"
+out="$(CQG_CONFIG="$CFG_ZH" bash "$GUARD" </dev/null)"
 expect "zh: ctx88 → 收敛协议" "收敛协议" "$out"
 
 echo "== configurable threshold =="
 rm -f "$STAMP"; snap 0 0 0 - - 70
 CFG_T="$TMP/config.t.sh"; sed 's/CQG_CTX_HALT=85/CQG_CTX_HALT=65/' "$CFG" > "$CFG_T"
-out="$(CQG_CONFIG="$CFG_T" ANTHROPIC_BASE_URL='' bash "$GUARD" </dev/null)"
+out="$(CQG_CONFIG="$CFG_T" bash "$GUARD" </dev/null)"
 expect "ctx70 with HALT=65 → QUOTA-LOW" "QUOTA-LOW" "$out"
+
+echo "== auto-detection from snapshot data =="
+rm -f "$STAMP"; snap '' '' '' '' '' 30
+expect "auto: empty 5h field → relay-like (rate skipped, ctx check only)" EMPTY "$(run auto)"
+
+rm -f "$STAMP"; snap 99 0 150 1h - 20
+expect "auto: 5h=99 ctx=20 → rate active, 99>=85 → QUOTA-LOW" "QUOTA-LOW" "$(run auto)"
+
+rm -f "$STAMP"; snap 40 0 45 2h - 30
+expect "auto: 5h=40 → rate active, 40<85 → silent" EMPTY "$(run auto)"
 
 echo ""
 echo "Result: $pass passed, $fail failed"
