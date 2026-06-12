@@ -23,6 +23,7 @@ CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 [[ -f "$CONFIG" ]] && . "$CONFIG"
 # defaults if config missing
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
+: "${CQG_NOTICE_STAMP:=$HOME/.claude/.cqg-notice-stamp}"  # guard's stamp base; collect only sweeps its per-session siblings
 : "${CQG_WRAPPED_STATUSLINE:=}"
 : "${CQG_EXPORT_JSON:=}"   # opt-in JSON export for other tools (empty = off)
 
@@ -59,16 +60,20 @@ five_int="$(intify "$five_h")"
 seven_int="$(intify "$seven_d")"
 ctx_int="$(intify "$ctx")"
 
+# Pull the raw context-window token counters once; shared by the fallback
+# (native missing) and the suspicious-zero guard (native present but glitchy).
+ctx_in="$(extract '.context_window.current_usage.input_tokens')"
+ctx_out="$(extract '.context_window.current_usage.output_tokens')"
+ctx_cc="$(extract '.context_window.current_usage.cache_creation_input_tokens')"
+ctx_cr="$(extract '.context_window.current_usage.cache_read_input_tokens')"
+ctx_size="$(extract '.context_window.context_window_size')"
+
 # Native used_percentage can be absent, or 0 meaning "not yet populated":
 # on a fresh session or the first frame after a compact, Claude Code may emit
 # used_percentage=0 while current_usage already holds the real initial-context
 # tokens (system prompt, tools, memory). Recompute from tokens/size so ctx isn't
 # under-reported in that window. Mirrors claude-hud's getContextPercent fallback.
 if [[ -z "$ctx_int" || "$ctx_int" == "0" ]]; then
-  ctx_in="$(extract '.context_window.current_usage.input_tokens')"
-  ctx_cc="$(extract '.context_window.current_usage.cache_creation_input_tokens')"
-  ctx_cr="$(extract '.context_window.current_usage.cache_read_input_tokens')"
-  ctx_size="$(extract '.context_window.context_window_size')"
   ctx_calc="$(awk -v i="${ctx_in:-0}" -v cc="${ctx_cc:-0}" -v cr="${ctx_cr:-0}" -v sz="${ctx_size:-0}" 'BEGIN {
     if (sz <= 0) exit;
     tot = i + cc + cr; if (tot <= 0) exit;
@@ -78,20 +83,47 @@ if [[ -z "$ctx_int" || "$ctx_int" == "0" ]]; then
   [[ -n "$ctx_calc" ]] && ctx_int="$ctx_calc"
 fi
 
+# Suspicious-zero guard: a frame where ctx is 0/absent *and* every current_usage
+# counter is zero, yet a real context_window block exists (size > 0), is a Claude
+# Code reporting glitch — not a genuinely empty context (a live session always
+# holds system-prompt/tool tokens). Writing it would clobber the good snapshot
+# with ctx=0 and mislead guard.sh into "context empty". When detected we skip the
+# snapshot/export write so the previous frame survives and ages out naturally
+# (fail-safe via CQG_MAX_AGE). The `size > 0` gate means relay/no-context-window
+# frames (rate-only) are NOT suppressed, and a genuinely fresh session simply has
+# no prior snapshot to protect — skipping is correct there too.
+suspicious_zero=false
+if [[ -z "$ctx_int" || "$ctx_int" == "0" ]]; then
+  suspicious_zero="$(awk -v sz="${ctx_size:-0}" -v i="${ctx_in:-0}" -v o="${ctx_out:-0}" \
+    -v cc="${ctx_cc:-0}" -v cr="${ctx_cr:-0}" 'BEGIN {
+    print (sz+0 > 0 && i+0==0 && o+0==0 && cc+0==0 && cr+0==0) ? "true" : "false";
+  }')"
+fi
+
 # ── 5h projection + human-readable reset deltas (delegated to shared lib) ──
 five_proj="$(cqg_five_hour_projection "$five_int" "$five_reset_at")"
 five_reset="$(cqg_fmt_reset_delta "$five_reset_at")"
 seven_reset="$(cqg_fmt_reset_delta "$seven_reset_at")"
 
-# ── write snapshot (delegates to shared lib) ───────────────────────────
-cqg_write_snapshot "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" "$session_id" || {
-  printf 'Warning: Failed to write quota snapshot\n' >&2
-}
+# ── write snapshot + export (skipped on a suspicious-zero glitch frame) ─
+if [[ "$suspicious_zero" == "true" ]]; then
+  # Glitch frame: keep the previous snapshot rather than clobber it with ctx=0.
+  printf 'Notice: suspicious zero-usage frame; preserving previous snapshot\n' >&2
+else
+  cqg_write_snapshot "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" "$session_id" || {
+    printf 'Warning: Failed to write quota snapshot\n' >&2
+  }
 
-# ── optional JSON export for other tools (no-op unless CQG_EXPORT_JSON set) ──
-# Passes raw reset epochs (not the human "3d"/"4h" deltas) so consumers get
-# machine-readable timestamps. Non-fatal: never break the status line.
-cqg_write_export_json "$five_int" "$seven_int" "$ctx_int" "$five_reset_at" "$seven_reset_at" || true
+  # Optional JSON export for other tools (no-op unless CQG_EXPORT_JSON set).
+  # Passes raw reset epochs (not the human "3d"/"4h" deltas) so consumers get
+  # machine-readable timestamps. Non-fatal: never break the status line.
+  cqg_write_export_json "$five_int" "$seven_int" "$ctx_int" "$five_reset_at" "$seven_reset_at" || true
+fi
+
+# ── amortized cleanup of abandoned per-session snapshot/stamp files ─────
+# Fires on ~1% of writes (CQG_SWEEP_RATE); deletes files older than N days.
+# Non-fatal: cleanup must never break the status line.
+cqg_sweep_stale || true
 
 # ── render the status line ─────────────────────────────────────────────
 if [[ -n "$CQG_WRAPPED_STATUSLINE" ]]; then

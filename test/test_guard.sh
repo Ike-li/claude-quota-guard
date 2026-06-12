@@ -131,6 +131,74 @@ if command -v jq >/dev/null 2>&1; then
   if [[ ! -f "$ejson" ]]; then echo "  ✓ export disabled by default (no file)"; ((pass++)); else echo "  ✗ export wrote a file when disabled"; ((fail++)); fi
 fi
 
+echo "== per-session sweep: stale removed, fresh + global + temp kept =="
+LIB="$SELF_DIR/../lib/snapshot.sh"
+swdir="$TMP/sweep"; mkdir -p "$swdir"
+SNAPB="$swdir/.quota-now"; STAMPB="$swdir/.cqg-notice-stamp"
+seed_sweep() {
+  printf 'x\n' > "$SNAPB"                               # global snapshot — keep
+  printf 'x\n' > "$SNAPB-FRESH"                         # fresh per-session — keep
+  printf 'x\n' > "$SNAPB.AbCdEf0000"                    # mktemp-style temp — keep (dot, not dash)
+  printf 'x\n' > "$SNAPB-OLD"; touch -t 200001010000 "$SNAPB-OLD"          # stale snapshot — sweep
+  printf 'x\n' > "$STAMPB-OLD"; touch -t 200001010000 "$STAMPB-OLD"        # stale stamp — sweep
+}
+# Forced sweep removes only the stale per-session files.
+seed_sweep
+CQG_SNAPSHOT="$SNAPB" CQG_NOTICE_STAMP="$STAMPB" CQG_SWEEP_FORCE=1 \
+  bash -c ". \"$LIB\"; cqg_sweep_stale"
+[[ -f "$SNAPB" ]]            && { echo "  ✓ global snapshot kept"; ((pass++)); } || { echo "  ✗ global deleted"; ((fail++)); }
+[[ -f "$SNAPB-FRESH" ]]      && { echo "  ✓ fresh per-session kept"; ((pass++)); } || { echo "  ✗ fresh deleted"; ((fail++)); }
+[[ -f "$SNAPB.AbCdEf0000" ]] && { echo "  ✓ mktemp temp kept (no dash match)"; ((pass++)); } || { echo "  ✗ temp deleted"; ((fail++)); }
+[[ ! -f "$SNAPB-OLD" ]]      && { echo "  ✓ stale per-session swept"; ((pass++)); } || { echo "  ✗ stale survived"; ((fail++)); }
+[[ ! -f "$STAMPB-OLD" ]]     && { echo "  ✓ stale stamp swept"; ((pass++)); } || { echo "  ✗ stale stamp survived"; ((fail++)); }
+# Disabled (rate=0, no force) → nothing removed even if stale.
+seed_sweep
+CQG_SNAPSHOT="$SNAPB" CQG_NOTICE_STAMP="$STAMPB" CQG_SWEEP_RATE=0 \
+  bash -c ". \"$LIB\"; cqg_sweep_stale"
+[[ -f "$SNAPB-OLD" ]] && { echo "  ✓ rate=0 disables sweep (stale kept)"; ((pass++)); } || { echo "  ✗ rate=0 still swept"; ((fail++)); }
+# rate=1 (always) exercises the real dice path → stale removed.
+seed_sweep
+CQG_SNAPSHOT="$SNAPB" CQG_NOTICE_STAMP="$STAMPB" CQG_SWEEP_RATE=1 \
+  bash -c ". \"$LIB\"; cqg_sweep_stale"
+[[ ! -f "$SNAPB-OLD" ]] && { echo "  ✓ rate=1 sweeps via dice path"; ((pass++)); } || { echo "  ✗ rate=1 did not sweep"; ((fail++)); }
+# End-to-end: collect.sh wiring actually invokes the sweep.
+seed_sweep
+echo '{"context_window":{"used_percentage":20},"session_id":"SW"}' \
+  | CQG_CONFIG=/nonexistent CQG_WRAPPED_STATUSLINE="" CQG_SNAPSHOT="$SNAPB" CQG_NOTICE_STAMP="$STAMPB" CQG_SWEEP_FORCE=1 bash "$COLLECT" >/dev/null 2>&1
+[[ ! -f "$SNAPB-OLD" ]] && { echo "  ✓ collect.sh invokes sweep end-to-end"; ((pass++)); } || { echo "  ✗ collect.sh did not sweep"; ((fail++)); }
+
+echo "== suspicious-zero guard: glitch frame must not clobber snapshot =="
+szs="$TMP/sz"
+# Seed a good prior per-session snapshot (native 70%).
+echo '{"context_window":{"used_percentage":70,"context_window_size":200000,"current_usage":{"input_tokens":140000}},"session_id":"SZ"}' \
+  | CQG_CONFIG=/nonexistent CQG_WRAPPED_STATUSLINE="" CQG_SNAPSHOT="$szs" bash "$COLLECT" >/dev/null 2>&1
+prev="$(awk -F'\t' 'NR==1{print $6}' "$szs-SZ" 2>/dev/null)"
+# Glitch frame: used_percentage 0, size present, all counters zero.
+echo '{"context_window":{"used_percentage":0,"context_window_size":200000,"current_usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"SZ"}' \
+  | CQG_CONFIG=/nonexistent CQG_WRAPPED_STATUSLINE="" CQG_SNAPSHOT="$szs" bash "$COLLECT" >/dev/null 2>&1
+after="$(awk -F'\t' 'NR==1{print $6}' "$szs-SZ" 2>/dev/null)"
+if [[ "$prev" == "70" && "$after" == "70" ]]; then echo "  ✓ glitch preserved ctx=70 (not clobbered to 0)"; ((pass++)); else echo "  ✗ prev=$prev after=$after"; ((fail++)); fi
+# Fresh session, no prior snapshot, all-zero usage → write nothing (no bogus 0).
+echo '{"context_window":{"used_percentage":0,"context_window_size":200000,"current_usage":{"input_tokens":0}},"session_id":"FRESH0"}' \
+  | CQG_CONFIG=/nonexistent CQG_WRAPPED_STATUSLINE="" CQG_SNAPSHOT="$szs" bash "$COLLECT" >/dev/null 2>&1
+if [[ ! -f "$szs-FRESH0" ]]; then echo "  ✓ fresh all-zero frame writes nothing"; ((pass++)); else echo "  ✗ wrote snapshot for fresh all-zero: $(awk -F'\t' 'NR==1{print $6}' "$szs-FRESH0")"; ((fail++)); fi
+# Regression: rate-only frame (no context_window at all) must STILL write.
+echo '{"rate_limits":{"five_hour":{"used_percentage":50,"resets_at":1739000000}},"session_id":"RLY"}' \
+  | CQG_CONFIG=/nonexistent CQG_WRAPPED_STATUSLINE="" CQG_SNAPSHOT="$szs" bash "$COLLECT" >/dev/null 2>&1
+fivew="$(awk -F'\t' 'NR==1{print $1}' "$szs-RLY" 2>/dev/null)"
+if [[ "$fivew" == "50" ]]; then echo "  ✓ rate-only frame still writes (not suppressed)"; ((pass++)); else echo "  ✗ rate-only suppressed (5h=$fivew)"; ((fail++)); fi
+# Not suspicious: native 0 but tokens present → fallback computes & writes.
+echo '{"context_window":{"used_percentage":0,"context_window_size":200000,"current_usage":{"input_tokens":80000}},"session_id":"TOK"}' \
+  | CQG_CONFIG=/nonexistent CQG_WRAPPED_STATUSLINE="" CQG_SNAPSHOT="$szs" bash "$COLLECT" >/dev/null 2>&1
+tokc="$(awk -F'\t' 'NR==1{print $6}' "$szs-TOK" 2>/dev/null)"
+if [[ "$tokc" == "40" ]]; then echo "  ✓ native-0 with tokens still writes (ctx=40, not suppressed)"; ((pass++)); else echo "  ✗ tokens-present frame ctx=$tokc"; ((fail++)); fi
+if command -v jq >/dev/null 2>&1; then
+  ejsz="$TMP/ejsz.json"; rm -f "$ejsz"
+  echo '{"context_window":{"used_percentage":0,"context_window_size":200000,"current_usage":{"input_tokens":0}},"session_id":"EXSZ"}' \
+    | CQG_CONFIG=/nonexistent CQG_WRAPPED_STATUSLINE="" CQG_SNAPSHOT="$szs" CQG_EXPORT_JSON="$ejsz" bash "$COLLECT" >/dev/null 2>&1
+  if [[ ! -f "$ejsz" ]]; then echo "  ✓ export skipped on suspicious-zero frame"; ((pass++)); else echo "  ✗ export written on glitch"; ((fail++)); fi
+fi
+
 echo "== i18n =="
 rm -f "$STAMP"; snap 40 9 45 2h 5d 88
 CFG_ZH="$TMP/config.zh.sh"; sed 's/CQG_LANG=en/CQG_LANG=zh/' "$CFG" > "$CFG_ZH"

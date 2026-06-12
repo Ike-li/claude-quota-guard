@@ -154,6 +154,45 @@ cqg_write_export_json() {
   fi
 }
 
+# ── Stale per-session file sweep ────────────────────────────────────────
+# Every session_id leaves a `${CQG_SNAPSHOT}-<id>` snapshot (and guard leaves a
+# `${CQG_NOTICE_STAMP}-<id>` stamp). Nothing prunes them at runtime, so SDK child
+# sessions and CI batches let them accumulate without bound. Mirrors claude-hud's
+# context-cache sweep: a cheap, amortized cleanup that fires on only a fraction of
+# writes (never on the hot path), deleting per-session files older than N days.
+#
+# Active sessions are safe: their files are rewritten every ~10s, so an mtime
+# older than CQG_SWEEP_MAX_AGE_DAYS only ever matches abandoned sessions. The
+# global `${CQG_SNAPSHOT}` / `${CQG_NOTICE_STAMP}` (no `-<id>` suffix) and the
+# mktemp `.XXXX` temp files (dot, not dash) never match the `<base>-*` glob.
+#
+# Env: CQG_SWEEP_RATE (1-in-N chance; default 100 ≈ 1%, 0 disables)
+#      CQG_SWEEP_MAX_AGE_DAYS (default 7)
+#      CQG_SWEEP_FORCE=1 forces a run regardless of the dice (tests)
+cqg_sweep_stale() {
+  local rate="${CQG_SWEEP_RATE:-100}"
+  local max_age="${CQG_SWEEP_MAX_AGE_DAYS:-7}"
+
+  if [[ "${CQG_SWEEP_FORCE:-0}" != "1" ]]; then
+    [[ "$rate" =~ ^[0-9]+$ && "$rate" -gt 0 ]] || return 0
+    (( RANDOM % rate == 0 )) || return 0
+  fi
+  [[ "$max_age" =~ ^[0-9]+$ ]] || max_age=7
+
+  _cqg_sweep_family() {
+    local base="$1" dir name
+    [[ -n "$base" ]] || return 0
+    dir="$(dirname "$base")"; name="$(basename "$base")"
+    [[ -d "$dir" ]] || return 0
+    # -mtime +N matches files strictly older than N days; -maxdepth 1 keeps it
+    # to this directory. Per-file/permission errors are swallowed.
+    find "$dir" -maxdepth 1 -type f -name "${name}-*" -mtime "+${max_age}" -delete 2>/dev/null || true
+  }
+
+  _cqg_sweep_family "${CQG_SNAPSHOT:-}"
+  _cqg_sweep_family "${CQG_NOTICE_STAMP:-}"
+}
+
 # ── 5h burn-rate projection ─────────────────────────────────────────────
 # Projects what % of the 5h budget we'll burn by the time the window resets,
 # given current usage and elapsed time. Returns empty if there isn't enough

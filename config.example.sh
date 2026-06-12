@@ -24,6 +24,14 @@
 # ── Data freshness: snapshots older than this many seconds are ignored ──
 : "${CQG_MAX_AGE:=60}"
 
+# ── Per-session file sweep ─────────────────────────────────────────────
+# Each session_id leaves a `${CQG_SNAPSHOT}-<id>` snapshot (+ a notice stamp).
+# collect.sh prunes abandoned ones opportunistically: on ~1-in-N writes it
+# deletes per-session files older than CQG_SWEEP_MAX_AGE_DAYS. Active sessions
+# are safe (rewritten every ~10s). Set CQG_SWEEP_RATE=0 to disable.
+: "${CQG_SWEEP_RATE:=100}"
+: "${CQG_SWEEP_MAX_AGE_DAYS:=7}"
+
 # ── File locations (rarely need changing) ──────────────────────────────
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_NOTICE_STAMP:=$HOME/.claude/.cqg-notice-stamp}"
