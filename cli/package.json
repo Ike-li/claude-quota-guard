@@ -1,0 +1,22 @@
+{
+  "name": "claude-quota-guard-cli",
+  "version": "0.1.0",
+  "description": "Dashboard + external query interface for claude-quota-guard (reads transcript JSONL + quota snapshot)",
+  "private": true,
+  "bin": {
+    "quota-guard": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "dev": "tsc -p . --watch",
+    "start": "node dist/cli.js",
+    "test": "tsc -p . && node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

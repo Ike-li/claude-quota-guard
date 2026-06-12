@@ -102,6 +102,41 @@ the `refreshInterval`) while idle.
 
 ---
 
+## Dashboard & query interface (`cli/`)
+
+The bash hooks above feed the *model* (inject a converge signal). The `cli/`
+Node/TS layer feeds *you and other tools*: it reads the transcript JSONL directly
+(works in `claude -p` / SDK headless mode, where no statusLine ever fires) and
+merges it with the quota snapshot into one view.
+
+```sh
+cd cli && npm install && npm run build      # one-time; produces cli/dist
+./bin/quota-guard watch                      # live full-screen TUI dashboard
+./bin/quota-guard query                      # one-shot, human-readable
+./bin/quota-guard query --json               # one-shot JSON for other apps
+```
+
+- **`watch`** — a zero-dependency TUI (Catppuccin) showing context, 5h/7d quota,
+  todos, running agents, recent tools, cumulative tokens and estimated cost,
+  refreshing live. `q` / `Ctrl-C` to quit.
+- **`query --json`** — the external interface for `claude -p` / SDK agents: shell
+  out, parse the `HudState` object (schema in [`cli/SCHEMA.md`](cli/SCHEMA.md)),
+  branch on `.context.usedPercent`, `.quota.*`, `.activity.todos`, etc.
+
+```sh
+# e.g. an SDK app checking a session before doing more work
+used=$(quota-guard query --json --session "$SID" | jq '.context.usedPercent')
+```
+
+**Data boundary:** the transcript carries activity + context tokens in *all*
+modes, but subscription **5h/7d% lives only in the snapshot** (written by the
+statusLine hook). In pure headless with no recent interactive session, `quota` is
+`none` (activity + context still work). Context % from the transcript assumes a
+200k window — pass `--window 1000000` for 1M-context models, or rely on the
+snapshot's authoritative figure when present.
+
+---
+
 ## Configure
 
 Edit `config.sh` (created from `config.example.sh` on install). Every value can

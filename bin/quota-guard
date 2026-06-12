@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Thin launcher for the claude-quota-guard CLI (compiled TS under cli/dist).
+# Keeps the bash-first repo layout: the Node/TS dashboard lives in cli/, this
+# wrapper just execs it so `quota-guard` can sit on PATH (install.sh may symlink).
+set -euo pipefail
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DIST="$SELF_DIR/../cli/dist/cli.js"
+if [[ ! -f "$DIST" ]]; then
+  printf 'quota-guard: CLI not built.\n  Run: (cd %s/../cli && npm install && npm run build)\n' "$SELF_DIR" >&2
+  exit 1
+fi
+exec node "$DIST" "$@"
