@@ -28,6 +28,15 @@
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_NOTICE_STAMP:=$HOME/.claude/.cqg-notice-stamp}"
 
+# ── JSON export bridge (opt-in; empty = disabled) ──────────────────────
+# Point this at a writable .json path and collect.sh will also emit the quota
+# numbers as a standard JSON object for *other* tools to consume (status bars,
+# notifiers). Atomic write, mode 0600, requires jq. Shape:
+#   { "updated_at": ISO, "five_hour": {used_percentage, resets_at},
+#     "seven_day": {...}, "context": {used_percentage} }
+# resets_at is unix epoch seconds; absent fields are JSON null.
+# : "${CQG_EXPORT_JSON:=$HOME/.claude/quota-export.json}"
+
 # ── Wrapped status line (set by installer in wrap mode) ────────────────
 # If set, collect.sh forwards stdin to this command and prints its output,
 # so your existing status line keeps working. Empty = standalone mode.

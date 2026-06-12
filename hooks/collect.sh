@@ -24,6 +24,7 @@ CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
 # defaults if config missing
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_WRAPPED_STATUSLINE:=}"
+: "${CQG_EXPORT_JSON:=}"   # opt-in JSON export for other tools (empty = off)
 
 # Source shared snapshot logic
 # shellcheck disable=SC1091
@@ -58,6 +59,25 @@ five_int="$(intify "$five_h")"
 seven_int="$(intify "$seven_d")"
 ctx_int="$(intify "$ctx")"
 
+# Native used_percentage can be absent, or 0 meaning "not yet populated":
+# on a fresh session or the first frame after a compact, Claude Code may emit
+# used_percentage=0 while current_usage already holds the real initial-context
+# tokens (system prompt, tools, memory). Recompute from tokens/size so ctx isn't
+# under-reported in that window. Mirrors claude-hud's getContextPercent fallback.
+if [[ -z "$ctx_int" || "$ctx_int" == "0" ]]; then
+  ctx_in="$(extract '.context_window.current_usage.input_tokens')"
+  ctx_cc="$(extract '.context_window.current_usage.cache_creation_input_tokens')"
+  ctx_cr="$(extract '.context_window.current_usage.cache_read_input_tokens')"
+  ctx_size="$(extract '.context_window.context_window_size')"
+  ctx_calc="$(awk -v i="${ctx_in:-0}" -v cc="${ctx_cc:-0}" -v cr="${ctx_cr:-0}" -v sz="${ctx_size:-0}" 'BEGIN {
+    if (sz <= 0) exit;
+    tot = i + cc + cr; if (tot <= 0) exit;
+    p = tot / sz * 100; if (p > 100) p = 100;
+    printf "%.0f", p;
+  }')"
+  [[ -n "$ctx_calc" ]] && ctx_int="$ctx_calc"
+fi
+
 # ── 5h projection + human-readable reset deltas (delegated to shared lib) ──
 five_proj="$(cqg_five_hour_projection "$five_int" "$five_reset_at")"
 five_reset="$(cqg_fmt_reset_delta "$five_reset_at")"
@@ -67,6 +87,11 @@ seven_reset="$(cqg_fmt_reset_delta "$seven_reset_at")"
 cqg_write_snapshot "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" "$session_id" || {
   printf 'Warning: Failed to write quota snapshot\n' >&2
 }
+
+# ── optional JSON export for other tools (no-op unless CQG_EXPORT_JSON set) ──
+# Passes raw reset epochs (not the human "3d"/"4h" deltas) so consumers get
+# machine-readable timestamps. Non-fatal: never break the status line.
+cqg_write_export_json "$five_int" "$seven_int" "$ctx_int" "$five_reset_at" "$seven_reset_at" || true
 
 # ── render the status line ─────────────────────────────────────────────
 if [[ -n "$CQG_WRAPPED_STATUSLINE" ]]; then

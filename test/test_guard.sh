@@ -98,6 +98,39 @@ echo '{"context_window":{"used_percentage":77},"session_id":"CS1"}' \
   | CQG_SNAPSHOT="$csnap" CQG_WRAPPED_STATUSLINE="" bash "$COLLECT" >/dev/null 2>&1
 if [[ -f "${csnap}-CS1" ]]; then echo "  ✓ collect wrote per-session file (.quota-now-CS1)"; ((pass++)); else echo "  ✗ collect missing per-session file"; ((fail++)); fi
 
+echo "== ctx fallback: native 0/absent → compute from current_usage tokens =="
+# used_percentage=0 ("not yet populated") but current_usage has real tokens:
+# collect.sh must recompute ctx from tokens/size, not write a misleading 0.
+cfb="$TMP/cfb"
+echo '{"context_window":{"used_percentage":0,"context_window_size":200000,"current_usage":{"input_tokens":50000,"cache_read_input_tokens":50000}},"session_id":"FB"}' \
+  | CQG_SNAPSHOT="$cfb" CQG_WRAPPED_STATUSLINE="" bash "$COLLECT" >/dev/null 2>&1
+ctx_written="$(awk -F'\t' 'NR==1{print $6}' "${cfb}-FB" 2>/dev/null)"
+expect "ctx fallback: 100k/200k tokens → 50%" "50" "$ctx_written"
+# Native non-zero must win untouched (no spurious recompute).
+echo '{"context_window":{"used_percentage":77,"context_window_size":200000,"current_usage":{"input_tokens":10000}},"session_id":"FB2"}' \
+  | CQG_SNAPSHOT="$cfb" CQG_WRAPPED_STATUSLINE="" bash "$COLLECT" >/dev/null 2>&1
+ctx_native="$(awk -F'\t' 'NR==1{print $6}' "${cfb}-FB2" 2>/dev/null)"
+expect "ctx fallback: native 77 preserved (no recompute)" "77" "$ctx_native"
+
+if command -v jq >/dev/null 2>&1; then
+  echo "== JSON export bridge (opt-in) =="
+  ejson="$TMP/export.json"
+  echo '{"rate_limits":{"five_hour":{"used_percentage":42,"resets_at":1739000000},"seven_day":{"used_percentage":7,"resets_at":1739500000}},"context_window":{"used_percentage":33},"session_id":"EX"}' \
+    | CQG_SNAPSHOT="$TMP/exsnap" CQG_EXPORT_JSON="$ejson" CQG_WRAPPED_STATUSLINE="" bash "$COLLECT" >/dev/null 2>&1
+  expect "export: five_hour.used_percentage=42" "42" "$(jq -r '.five_hour.used_percentage' "$ejson" 2>/dev/null)"
+  expect "export: five_hour.resets_at=1739000000 (raw epoch)" "1739000000" "$(jq -r '.five_hour.resets_at' "$ejson" 2>/dev/null)"
+  expect "export: context.used_percentage=33" "33" "$(jq -r '.context.used_percentage' "$ejson" 2>/dev/null)"
+  # Relay-style input (empty rate fields) must serialize as JSON null, not "".
+  echo '{"context_window":{"used_percentage":20},"session_id":"EX2"}' \
+    | CQG_SNAPSHOT="$TMP/exsnap2" CQG_EXPORT_JSON="$ejson" CQG_WRAPPED_STATUSLINE="" bash "$COLLECT" >/dev/null 2>&1
+  expect "export: absent 5h → JSON null" "null" "$(jq -r '.five_hour.used_percentage' "$ejson" 2>/dev/null)"
+  # Disabled by default: no CQG_EXPORT_JSON → no file written.
+  rm -f "$ejson"
+  echo '{"context_window":{"used_percentage":20},"session_id":"EX3"}' \
+    | CQG_SNAPSHOT="$TMP/exsnap3" CQG_WRAPPED_STATUSLINE="" bash "$COLLECT" >/dev/null 2>&1
+  if [[ ! -f "$ejson" ]]; then echo "  ✓ export disabled by default (no file)"; ((pass++)); else echo "  ✗ export wrote a file when disabled"; ((fail++)); fi
+fi
+
 echo "== i18n =="
 rm -f "$STAMP"; snap 40 9 45 2h 5d 88
 CFG_ZH="$TMP/config.zh.sh"; sed 's/CQG_LANG=en/CQG_LANG=zh/' "$CFG" > "$CFG_ZH"

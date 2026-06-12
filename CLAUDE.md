@@ -36,6 +36,8 @@ The key idea: numbers go stale if hard-coded into CLAUDE.md, so the **live numbe
 
 Fields absent on API/relay mode are written empty. `guard.sh` parses them with `awk -F'\t'` (robust to empty fields; `read` collapses them).
 
+**ctx fallback:** `collect.sh` prefers Claude Code's native `context_window.used_percentage`, but treats absent **or `0`** as "not yet populated" (fresh session / first frame after a compact, when `current_usage` already holds real initial-context tokens). In that case it recomputes ctx from `current_usage` tokens ÷ `context_window_size` so the snapshot isn't under-reported. Mirrors claude-hud's `getContextPercent`.
+
 ### Per-session snapshots
 
 When a `session_id` is available, `collect.sh` also writes `${CQG_SNAPSHOT}-${session_id}`. `guard.sh` reads **only** that per-session file — never the shared global `.quota-now` — because every session writes global (`cqg_write_snapshot` writes both), so reading global lets one session inherit another's numbers (e.g. a relay session with no rate data of its own picking up a subscription session's `5h=98%`). If the per-session file doesn't exist yet (collect.sh hasn't run with this id — e.g. SDK child sessions), guard exits silent rather than cross-talk. The global file is consulted **only when there is no session_id at all**.
@@ -45,6 +47,7 @@ When a `session_id` is available, `collect.sh` also writes `${CQG_SNAPSHOT}-${se
 Sourced by `collect.sh`, `guard.sh`, and `statusline-command.sh`. Provides:
 
 - `cqg_write_snapshot` — atomic write (mktemp + mv) of both global and per-session files
+- `cqg_write_export_json` — opt-in JSON export (mktemp + mv, mode 0600) for *other* tools to consume; no-op unless `CQG_EXPORT_JSON` is set; requires jq; empty fields serialize as JSON `null`
 - `cqg_stat_mtime` / `cqg_stat_size` — portable stat (BSD/macOS vs Linux), platform cached
 - `cqg_sanitize_session_id` — strips unsafe chars from session IDs for filename use
 - `cqg_five_hour_projection` — burn-rate projection (current pace → where we'll be at window reset)
@@ -74,6 +77,7 @@ Every value can be overridden via environment variable. Key settings:
 - `CQG_LANG` (en) — signal language: `en` | `zh`
 - `CQG_MAX_AGE` (60) — ignore snapshots older than N seconds
 - `CQG_WRAPPED_STATUSLINE` — set by installer in wrap mode; forwards stdin to user's existing status line
+- `CQG_EXPORT_JSON` (empty) — opt-in path; when set, `collect.sh` also emits the quota numbers as a standard JSON object (`{updated_at, five_hour, seven_day, context}`, `resets_at` as unix epoch seconds) for external tools to read
 
 ### Installer modes
 

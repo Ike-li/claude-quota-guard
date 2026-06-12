@@ -106,6 +106,54 @@ cqg_write_snapshot() {
   fi
 }
 
+# ── JSON export bridge (opt-in) ─────────────────────────────────────────
+# Writes the quota numbers as a standard JSON object so *other* tools can
+# consume them (status bars, notifiers). Mirrors claude-hud's externalUsage
+# export: single object, atomic write (tmp + mv), mode 0600.
+#   - Disabled unless CQG_EXPORT_JSON points at a target path.
+#   - Requires jq (used for safe JSON construction); silently no-ops without it.
+#   - Empty fields are emitted as JSON null, never "".
+#   - resets_at is unix epoch seconds (a consumer can treat values >1e12 as ms).
+# Args: five_pct seven_pct ctx_pct five_reset_epoch seven_reset_epoch
+# Env:  CQG_EXPORT_JSON (target path; empty/unset = disabled)
+# Returns: 0 on success or when disabled, 1 on write failure.
+cqg_write_export_json() {
+  [[ -n "${CQG_EXPORT_JSON:-}" ]] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+
+  local five="$1" seven="$2" ctx="$3" five_reset="$4" seven_reset="$5"
+  local dest="$CQG_EXPORT_JSON" tmp json now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  # `nn`: empty string → null, numeric string → number, garbage → null.
+  json="$(jq -cn \
+    --arg now "$now" \
+    --arg five "$five" --arg seven "$seven" --arg ctx "$ctx" \
+    --arg fr "$five_reset" --arg sr "$seven_reset" '
+      def nn: if . == "" then null else (tonumber? // null) end;
+      {
+        updated_at: $now,
+        five_hour: { used_percentage: ($five|nn), resets_at: ($fr|nn) },
+        seven_day: { used_percentage: ($seven|nn), resets_at: ($sr|nn) },
+        context:   { used_percentage: ($ctx|nn) }
+      }' 2>/dev/null)" || return 1
+  [[ -n "$json" ]] || return 1
+
+  tmp="$(mktemp "${dest}.XXXXXXXXXX" 2>/dev/null)" || {
+    printf 'cqg_write_export_json: mktemp failed for %s\n' "$dest" >&2
+    return 1
+  }
+  if ! printf '%s\n' "$json" > "$tmp" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null
+    return 1
+  fi
+  chmod 600 "$tmp" 2>/dev/null || true
+  if ! mv -f "$tmp" "$dest" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null
+    return 1
+  fi
+}
+
 # ── 5h burn-rate projection ─────────────────────────────────────────────
 # Projects what % of the 5h budget we'll burn by the time the window resets,
 # given current usage and elapsed time. Returns empty if there isn't enough
