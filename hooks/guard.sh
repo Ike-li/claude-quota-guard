@@ -57,11 +57,19 @@ fi
 _session_id="$(cqg_sanitize_session_id "$_session_id")"
 _snap_label="global"
 if [ -n "$_session_id" ]; then
+  # A session_id is present → trust ONLY this session's own snapshot, never the
+  # shared global file. Every session writes global (lib: cqg_write_snapshot), so
+  # falling back to it lets one session read another's numbers — e.g. a relay
+  # session with no rate data of its own inheriting a subscription session's
+  # 5h=98%. If this session's per-session file isn't there yet (collect.sh hasn't
+  # run with this id, e.g. SDK child sessions), stay silent rather than cross-talk.
   _sess_snap="${CQG_SNAPSHOT}-${_session_id}"
-  if [ -f "$_sess_snap" ]; then
-    CQG_SNAPSHOT="$_sess_snap"
-    _snap_label="session"
+  if [ ! -f "$_sess_snap" ]; then
+    _log "sess=${_session_id} snap=session-missing (no global fallback) → exit"
+    exit 0
   fi
+  CQG_SNAPSHOT="$_sess_snap"
+  _snap_label="session"
   CQG_NOTICE_STAMP="${CQG_NOTICE_STAMP}-${_session_id}"
 fi
 

@@ -38,7 +38,7 @@ Fields absent on API/relay mode are written empty. `guard.sh` parses them with `
 
 ### Per-session snapshots
 
-When a `session_id` is available, `collect.sh` also writes `${CQG_SNAPSHOT}-${session_id}`. `guard.sh` prefers the per-session file if it exists — this prevents concurrent Claude Code sessions from overwriting each other's context-window values.
+When a `session_id` is available, `collect.sh` also writes `${CQG_SNAPSHOT}-${session_id}`. `guard.sh` reads **only** that per-session file — never the shared global `.quota-now` — because every session writes global (`cqg_write_snapshot` writes both), so reading global lets one session inherit another's numbers (e.g. a relay session with no rate data of its own picking up a subscription session's `5h=98%`). If the per-session file doesn't exist yet (collect.sh hasn't run with this id — e.g. SDK child sessions), guard exits silent rather than cross-talk. The global file is consulted **only when there is no session_id at all**.
 
 ### Shared library (`lib/snapshot.sh`)
 

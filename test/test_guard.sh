@@ -79,6 +79,18 @@ out="$(CQG_CONFIG="$CFG" bash "$GUARD" <<< '{"session_id":"S1"}')"
 expect "guard prefers per-session (ctx90) over global (ctx30)" "QUOTA-LOW" "$out"
 rm -f "${SNAP}-S1" "${STAMP}-S1"
 
+echo "== session_id present but no per-session file → no global fallback (cross-talk guard) =="
+# Regression: every session writes the shared global file, so a session reading
+# global inherits another session's numbers. With a session_id, guard must read
+# ONLY its own file; if absent, stay silent rather than cross-talk.
+rm -f "$STAMP"; snap 98 10 18 now 5d 6             # global: someone else's 5h=98 (would converge)
+expect "sess present + per-session missing → silent (ignores global 5h=98)" \
+  EMPTY "$(CQG_CONFIG="$CFG" bash "$GUARD" <<< '{"session_id":"GHOST"}')"
+# Sanity: the very same global snapshot DOES trigger when there is no session_id.
+rm -f "$STAMP"
+expect "no session_id + global 5h=98 → QUOTA-LOW (global still used)" \
+  "QUOTA-LOW" "$(CQG_CONFIG="$CFG" bash "$GUARD" </dev/null)"
+
 echo "== collect writes per-session snapshot =="
 COLLECT="$SELF_DIR/../hooks/collect.sh"
 csnap="$TMP/csnap"

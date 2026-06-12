@@ -125,7 +125,9 @@ Every invocation appends one line to the log:
 2026-06-06T05:26:37 sess=?      snap=missing             → exit
 ```
 
-Fields: timestamp · `sess` (session ID, `?` when absent) · `snap` (`session` = per-session file, `global` = shared fallback) · `ctx`/`5h` values · decision reached.
+Fields: timestamp · `sess` (session ID, `?` when absent) · `snap` (`session` = per-session file, `global` = shared file, used only when there's no session ID) · `ctx`/`5h` values · decision reached.
+
+When a session ID is present but its per-session file doesn't exist yet, guard logs `snap=session-missing … → exit` and stays silent — it never falls back to the shared global file (see "Per-session snapshots" below).
 
 ---
 
