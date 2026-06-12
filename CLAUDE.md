@@ -100,16 +100,16 @@ The bash hooks feed the **model** (converge signal); `cli/` feeds **humans and e
 
 | Module | Role |
 |---|---|
-| `cli/src/transcript.ts` | Streaming JSONL parser (adapted from claude-hud): tools, agents (background completion via queue-operation timestamps), todos, skills, MCP servers, cumulative tokens (dual-logging dedup), session metadata. In-memory cache keyed by (path, mtime, size) keeps the watch loop cheap. |
+| `cli/src/transcript.ts` | Streaming JSONL parser (adapted from claude-hud): tools, agents (background completion via queue-operation timestamps), todos, skills, MCP servers, cumulative tokens (dual-logging dedup) — both a flat total and a per-model split keyed on each turn's `message.model`, for per-model costing — session metadata. In-memory cache keyed by (path, mtime, size) keeps the watch loop cheap. |
 | `cli/src/snapshot.ts` | Reads the bash side's `.quota-now` for 5h/7d/ctx. **Per-session strict, mirroring guard.sh**: a known session id reads only its own file, never global (cross-talk); global only when no session id is known. |
 | `cli/src/aggregate.ts` + `types.ts` | Merge into one `HudState` consumed by both surfaces. `schemaVersion` stamped for external consumers — contract in `cli/SCHEMA.md`. |
 | `cli/src/query.ts` / `tui.ts` | `query [--json]` one-shot output for `claude -p`/SDK apps; `watch` zero-dependency ANSI TUI (alt-screen, Catppuccin), clean teardown on q/Ctrl-C/SIGTERM. |
-| `cli/src/format.ts` | Shared formatting + token-derived cost estimate (per-MTok pricing table; unknown models → `null`, never a silent wrong guess). |
+| `cli/src/format.ts` | Shared formatting + token-derived cost estimate (per-MTok pricing table; unknown models → `null`, never a silent wrong guess). `estimateCostByModel` prices each model's bucket at its own rate and sums them, so mixed-model sessions aren't charged at one blanket rate — the total stays `null` if any token-bearing bucket is unpriceable. |
 | `bin/quota-guard` | Thin bash launcher exec'ing `cli/dist/cli.js`. |
 
 **Data boundary:** transcript carries activity + context tokens in all modes; subscription 5h/7d% lives **only** in the snapshot. Pure headless with no per-session snapshot → `quota: none` (honest), activity/context still work. Context % from snapshot keeps `windowSize` null (real window may be 1M); transcript-derived % assumes `--window` (default 200k).
 
-Tests: `cli/test/aggregate.test.js` (node built-in runner) drives the compiled `dist/` against a fixture transcript; pricing table locked by exact-rate assertions.
+Tests: `cli/test/aggregate.test.js` (node built-in runner) drives the compiled `dist/` against fixture transcripts (single- and mixed-model); pricing table and per-model cost split locked by exact-rate assertions.
 
 ### Hook wiring
 

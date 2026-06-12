@@ -2,7 +2,7 @@
 // a token-derived cost estimate adapted from jarrodwatts/claude-hud's cost.ts.
 // Pure functions, no side effects.
 
-import type { SessionTokenUsage } from './types';
+import type { SessionTokenUsage, ModelTokenBucket, ModelCostBucket } from './types';
 
 export function fmtNum(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—';
@@ -100,4 +100,29 @@ export function estimateCostUsd(model: string | null, t: SessionTokenUsage): num
   const cacheReadUsd = (t.cacheRead * p.inPerM * CACHE_READ_MULT) / 1_000_000;
   const outputUsd = (t.output * p.outPerM) / 1_000_000;
   return inputUsd + cacheWriteUsd + cacheReadUsd + outputUsd;
+}
+
+// Cost a session that may span several models, pricing each bucket at its own
+// rate and summing. The total stays conservative — matching estimateCostUsd's
+// "no silent under-pricing" contract: if ANY token-bearing bucket has an unknown
+// model, the total is null (we can't honestly sum what we can't price), even
+// though the known buckets still carry their own costUsd in perModel. Zero-token
+// buckets are ignored so they neither contribute nor poison the total.
+export function estimateCostByModel(
+  buckets: ModelTokenBucket[],
+): { total: number | null; perModel: ModelCostBucket[] } {
+  const perModel: ModelCostBucket[] = buckets.map((b) => ({
+    model: b.model,
+    usage: b.usage,
+    costUsd: estimateCostUsd(b.model, b.usage),
+  }));
+  let total = 0;
+  let priceable = false;
+  for (const b of perModel) {
+    if (b.usage.total === 0) continue;
+    if (b.costUsd === null) return { total: null, perModel };
+    total += b.costUsd;
+    priceable = true;
+  }
+  return { total: priceable ? total : null, perModel };
 }

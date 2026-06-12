@@ -80,8 +80,20 @@ shape. `schemaVersion` is bumped on any breaking change. Source of truth:
       "input": 9100, "output": 167600,
       "cacheCreation": 0, "cacheRead": 16700000, "total": 16876700
     },
-    "estimatedCostUsd": 47.03 | null,   // token-derived; null for unknown models
-    "costSource": "estimate" | "none"
+    // Sum of the per-model buckets below. null if ANY token-bearing model is
+    // unpriceable (e.g. a Bedrock ARN) — never a silent under-count.
+    "estimatedCostUsd": 47.03 | null,
+    "costSource": "estimate" | "none",
+    // Tokens split by the model that produced them, each priced at its own rate,
+    // so a session mixing models (main agent + subagents, or a plan-mode model)
+    // is costed per-model rather than charging every token at one blanket rate.
+    // costUsd is null for an unpriceable model; the buckets sum to sessionTokens.
+    "tokensByModel": [
+      { "model": "claude-opus-4-8",
+        "usage": { "input": 9100, "output": 167600,
+                   "cacheCreation": 0, "cacheRead": 16700000, "total": 16876700 },
+        "costUsd": 47.03 }
+    ]
   }
 }
 ```

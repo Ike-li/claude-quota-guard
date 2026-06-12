@@ -5,7 +5,7 @@
 import * as os from 'node:os';
 import { parseTranscript, findTranscript } from './transcript';
 import { readSnapshot, defaultSnapshotPath } from './snapshot';
-import { estimateCostUsd } from './format';
+import { estimateCostByModel } from './format';
 import { HUD_SCHEMA_VERSION, type HudState, type ContextState, type QuotaState } from './types';
 
 export interface AggregateOptions {
@@ -83,8 +83,10 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
   const pending = todos.filter((t) => t.status === 'pending').length;
   const runningAgents = tx.agents.filter((a) => a.status === 'running').length;
 
-  // ── cost ──
-  const estimatedCostUsd = estimateCostUsd(tx.model, tx.sessionTokens);
+  // ── cost: price each model's tokens at its own rate, then sum. Mixed-model
+  //    sessions (main agent + subagents) are no longer charged at one blanket
+  //    rate. Total stays null if any token-bearing model is unpriceable.
+  const { total: estimatedCostUsd, perModel: costByModel } = estimateCostByModel(tx.tokensByModel);
 
   return {
     schemaVersion: HUD_SCHEMA_VERSION,
@@ -113,6 +115,7 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
       sessionTokens: tx.sessionTokens,
       estimatedCostUsd,
       costSource: estimatedCostUsd !== null ? 'estimate' : 'none',
+      tokensByModel: costByModel,
     },
   };
 }

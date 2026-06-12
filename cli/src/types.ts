@@ -42,6 +42,19 @@ export interface SessionTokenUsage {
   total: number;
 }
 
+// Per-model token split. A session may mix models (main agent + subagents, or a
+// plan-mode model) — costing the summed tokens at one blanket rate misprices
+// such sessions, so we keep the tokens bucketed by the model that produced them.
+export interface ModelTokenBucket {
+  model: string;
+  usage: SessionTokenUsage;
+}
+
+// A token bucket with its own cost estimate (null when the model is unpriceable).
+export interface ModelCostBucket extends ModelTokenBucket {
+  costUsd: number | null;
+}
+
 // Raw extract from a transcript JSONL — produced by transcript.ts, before
 // aggregation merges in snapshot data.
 export interface TranscriptData {
@@ -59,6 +72,9 @@ export interface TranscriptData {
   skills: string[];
   mcpServers: string[];
   sessionTokens: SessionTokenUsage;
+  // Same tokens, split by producing model. Sums to sessionTokens for the
+  // model-tagged turns (every assistant API response carries a model).
+  tokensByModel: ModelTokenBucket[];
   // Best-effort current context occupancy, in tokens: the most recent
   // assistant turn's prompt size (input + cache_read + cache_creation).
   contextTokens: number | null;
@@ -115,5 +131,8 @@ export interface HudState {
     sessionTokens: SessionTokenUsage;
     estimatedCostUsd: number | null;
     costSource: 'estimate' | 'none';
+    // Per-model cost breakdown. estimatedCostUsd is the sum of these (null if any
+    // token-bearing bucket is unpriceable). Empty when no tokens/models seen.
+    tokensByModel: ModelCostBucket[];
   };
 }

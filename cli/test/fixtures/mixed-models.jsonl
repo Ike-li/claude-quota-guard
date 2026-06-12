@@ -1,0 +1,4 @@
+{"type":"user","timestamp":"2026-06-12T11:00:00Z","sessionId":"MIX","cwd":"/tmp/mix","gitBranch":"main","version":"2.1.0"}
+{"type":"assistant","timestamp":"2026-06-12T11:00:01Z","sessionId":"MIX","message":{"model":"claude-opus-4-8","usage":{"input_tokens":1000000,"output_tokens":1000000,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"content":[{"type":"tool_use","id":"task1","name":"Task","input":{"subagent_type":"Explore","description":"sub","run_in_background":false}}]}}
+{"type":"user","timestamp":"2026-06-12T11:00:02Z","message":{"content":[{"type":"tool_result","tool_use_id":"task1","is_error":false}]}}
+{"type":"assistant","timestamp":"2026-06-12T11:00:03Z","sessionId":"MIX","message":{"model":"claude-haiku-4-5","usage":{"input_tokens":2000000,"output_tokens":2000000,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"content":[]}}

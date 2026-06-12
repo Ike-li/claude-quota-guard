@@ -146,6 +146,7 @@ function emptyData(): TranscriptData {
     skills: [],
     mcpServers: [],
     sessionTokens: { input: 0, output: 0, cacheCreation: 0, cacheRead: 0, total: 0 },
+    tokensByModel: [],
     contextTokens: null,
   };
 }
@@ -171,6 +172,7 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
   const mcpSet = new Set<string>();
   let todos: TodoItem[] = [];
   const tokens: SessionTokenUsage = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0, total: 0 };
+  const tokensByModel = new Map<string, SessionTokenUsage>();
   const queueCompletion = new Map<string, string>();
   let lastUsageKey: string | undefined;
 
@@ -229,6 +231,20 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
           // Current context occupancy ≈ this turn's prompt size.
           data.contextTokens =
             num(u.input_tokens) + num(u.cache_read_input_tokens) + num(u.cache_creation_input_tokens);
+          // Attribute this turn's tokens to the producing model, so a session
+          // that mixes models is priced per-model rather than at one blanket rate.
+          const model = entry.message.model;
+          if (model) {
+            let bucket = tokensByModel.get(model);
+            if (!bucket) {
+              bucket = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0, total: 0 };
+              tokensByModel.set(model, bucket);
+            }
+            bucket.input += num(u.input_tokens);
+            bucket.output += num(u.output_tokens);
+            bucket.cacheCreation += num(u.cache_creation_input_tokens);
+            bucket.cacheRead += num(u.cache_read_input_tokens);
+          }
         }
         lastUsageKey = key;
       } else {
@@ -319,12 +335,16 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
   }
 
   tokens.total = tokens.input + tokens.output + tokens.cacheCreation + tokens.cacheRead;
+  for (const bucket of tokensByModel.values()) {
+    bucket.total = bucket.input + bucket.output + bucket.cacheCreation + bucket.cacheRead;
+  }
   data.tools = Array.from(toolMap.values()).slice(-20);
   data.agents = Array.from(agentMap.values()).slice(-10);
   data.todos = todos;
   data.skills = Array.from(skillSet);
   data.mcpServers = Array.from(mcpSet);
   data.sessionTokens = tokens;
+  data.tokensByModel = Array.from(tokensByModel, ([model, usage]) => ({ model, usage }));
 
   cache.set(transcriptPath, { mtimeMs: stat.mtimeMs, size: stat.size, data });
   return data;
