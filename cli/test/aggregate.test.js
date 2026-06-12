@@ -62,3 +62,18 @@ test('schema version is stamped', async () => {
   const state = await aggregate({ transcriptPath: FIXTURE, snapshotPath: '/tmp/none' });
   assert.equal(state.schemaVersion, 1);
 });
+
+test('pricing table matches published per-MTok rates', () => {
+  const { estimateCostUsd } = require('../dist/format');
+  // 1M input + 1M output, no cache → cost = inPerM + outPerM exactly.
+  const t = { input: 1_000_000, output: 1_000_000, cacheCreation: 0, cacheRead: 0, total: 2_000_000 };
+  assert.equal(estimateCostUsd('claude-fable-5', t), 60); // $10 + $50
+  assert.equal(estimateCostUsd('claude-opus-4-8', t), 30); // $5 + $25 (NOT legacy $15/$75)
+  assert.equal(estimateCostUsd('claude-opus-4-1', t), 90); // legacy $15 + $75
+  assert.equal(estimateCostUsd('claude-sonnet-4-6', t), 18); // $3 + $15
+  assert.equal(estimateCostUsd('claude-haiku-4-5-20251001', t), 6); // $1 + $5
+  assert.equal(estimateCostUsd('totally-unknown-model', t), null); // no silent mispricing
+  // Cache multipliers: 1M cache-read on opus 4.8 → 5 * 0.1 = $0.50
+  const c = { input: 0, output: 0, cacheCreation: 0, cacheRead: 1_000_000, total: 1_000_000 };
+  assert.equal(estimateCostUsd('claude-opus-4-8', c), 0.5);
+});

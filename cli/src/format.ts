@@ -57,18 +57,28 @@ interface Pricing {
   inPerM: number;
   outPerM: number;
 }
+// Cache-write multiplier is the 5-minute-TTL rate (1.25×). Claude Code also
+// uses 1h-TTL cache writes (2×) which we can't distinguish in the summed
+// cache_creation_input_tokens — the estimate may understate those slightly.
 const CACHE_WRITE_MULT = 1.25;
 const CACHE_READ_MULT = 0.1;
 
 // First match wins; more specific lines before broader fallbacks.
+// Prices per 1M tokens, per platform.claude.com (cached 2026-06):
+//   Fable 5 / Mythos 5: $10/$50 · Opus 4.5–4.8: $5/$25 (4.0/4.1 were $15/$75)
+//   Sonnet 4.x: $3/$15 · Haiku 4.5: $1/$5 · Haiku 3.5: $0.8/$4
 const PRICING: Array<{ re: RegExp; p: Pricing }> = [
-  { re: /\bopus[\s-]?4/i, p: { inPerM: 15, outPerM: 75 } },
-  { re: /\bopusplan\b/i, p: { inPerM: 15, outPerM: 75 } },
+  { re: /\bfable[\s-]?5/i, p: { inPerM: 10, outPerM: 50 } },
+  { re: /\bmythos[\s-]?5/i, p: { inPerM: 10, outPerM: 50 } },
+  { re: /\bopus[\s-]?4[\s.-]?[5678]/i, p: { inPerM: 5, outPerM: 25 } },
+  { re: /\bopus[\s-]?4[\s.-]?[01]\b/i, p: { inPerM: 15, outPerM: 75 } },
+  { re: /\bopus\b/i, p: { inPerM: 5, outPerM: 25 } }, // bare/unknown opus → current tier
+  { re: /\bopusplan\b/i, p: { inPerM: 5, outPerM: 25 } },
   { re: /\bsonnet[\s-]?(4|3[\s.-]?[57])/i, p: { inPerM: 3, outPerM: 15 } },
   { re: /\bsonnetplan\b/i, p: { inPerM: 3, outPerM: 15 } },
   { re: /\bhaiku[\s-]?4/i, p: { inPerM: 1, outPerM: 5 } },
   { re: /\bhaiku[\s-]?3[\s.-]?5/i, p: { inPerM: 0.8, outPerM: 4 } },
-  { re: /\bhaikuplan\b/i, p: { inPerM: 0.8, outPerM: 4 } },
+  { re: /\bhaikuplan\b/i, p: { inPerM: 1, outPerM: 5 } },
 ];
 
 function pricingFor(model: string | null): Pricing | null {

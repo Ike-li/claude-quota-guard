@@ -9,10 +9,15 @@ Monitors Claude Code's **5h/7d rate limits** (subscription) and **context-window
 ## Commands
 
 ```bash
-bash test/test_guard.sh   # Run all tests (self-contained, no side effects)
+bash test/test_guard.sh   # Run all bash tests (self-contained, no side effects)
 ./install.sh              # Interactive install (wires hooks into ~/.claude/)
 ./uninstall.sh            # Removes hooks and cleans up
 bash -n hooks/guard.sh    # Syntax-check any script without running it
+
+(cd cli && npm install && npm run build)   # one-time: build the dashboard CLI
+(cd cli && npm test)                       # cli tests (builds first, node --test)
+./bin/quota-guard query [--json]           # one-shot session state (external interface)
+./bin/quota-guard watch                    # live TUI dashboard
 ```
 
 ## Architecture: live data, static policy, decoupled
@@ -88,6 +93,23 @@ Every value can be overridden via environment variable. Key settings:
 Claude Code allows only one statusLine command. If the user already has one, `install.sh` offers **wrap mode**: `collect.sh` extracts data, then forwards stdin to the existing status line — the user's display is unchanged. Otherwise, a minimal standalone line is used (`ctx N% · 5h N% · 7d N%`).
 
 `statusline-command.sh` is a separate rich status line (Catppuccin Mocha, two lines) that can replace `collect.sh` entirely — it writes the same snapshot format so `guard.sh` still works.
+
+### Dashboard CLI (`cli/` — Node/TS)
+
+The bash hooks feed the **model** (converge signal); `cli/` feeds **humans and external apps**. It reads the transcript JSONL directly, so it works in `claude -p` / SDK headless mode where the statusLine never fires and the snapshot pipeline is blind.
+
+| Module | Role |
+|---|---|
+| `cli/src/transcript.ts` | Streaming JSONL parser (adapted from claude-hud): tools, agents (background completion via queue-operation timestamps), todos, skills, MCP servers, cumulative tokens (dual-logging dedup), session metadata. In-memory cache keyed by (path, mtime, size) keeps the watch loop cheap. |
+| `cli/src/snapshot.ts` | Reads the bash side's `.quota-now` for 5h/7d/ctx. **Per-session strict, mirroring guard.sh**: a known session id reads only its own file, never global (cross-talk); global only when no session id is known. |
+| `cli/src/aggregate.ts` + `types.ts` | Merge into one `HudState` consumed by both surfaces. `schemaVersion` stamped for external consumers — contract in `cli/SCHEMA.md`. |
+| `cli/src/query.ts` / `tui.ts` | `query [--json]` one-shot output for `claude -p`/SDK apps; `watch` zero-dependency ANSI TUI (alt-screen, Catppuccin), clean teardown on q/Ctrl-C/SIGTERM. |
+| `cli/src/format.ts` | Shared formatting + token-derived cost estimate (per-MTok pricing table; unknown models → `null`, never a silent wrong guess). |
+| `bin/quota-guard` | Thin bash launcher exec'ing `cli/dist/cli.js`. |
+
+**Data boundary:** transcript carries activity + context tokens in all modes; subscription 5h/7d% lives **only** in the snapshot. Pure headless with no per-session snapshot → `quota: none` (honest), activity/context still work. Context % from snapshot keeps `windowSize` null (real window may be 1M); transcript-derived % assumes `--window` (default 200k).
+
+Tests: `cli/test/aggregate.test.js` (node built-in runner) drives the compiled `dist/` against a fixture transcript; pricing table locked by exact-rate assertions.
 
 ### Hook wiring
 
