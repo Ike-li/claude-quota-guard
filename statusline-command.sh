@@ -290,14 +290,22 @@ nonnull "$mode_str" && model_render="${model_render:+$model_render }${ROSE}${mod
 # Extract provider domain from .claude/settings.local.json if present
 provider_domain=""
 if nonnull "$cwd"; then
-  settings_local="${cwd}/.claude/settings.local.json"
-  if [[ -f "$settings_local" ]] && command -v jq >/dev/null 2>&1; then
-    base_url="$(jq -r '.env.ANTHROPIC_BASE_URL // empty' "$settings_local" 2>/dev/null)"
-    if [[ -n "$base_url" && "$base_url" != "https://api.anthropic.com"* ]]; then
-      # Extract domain: https://muyuan.do/path → muyuan.do
-      provider_domain="$(printf '%s' "$base_url" | sed -E 's|^https?://([^/:]+).*|\1|')"
+  # Walk up directory tree to find .claude/settings.local.json (max 10 levels)
+  search_dir="$cwd"
+  for i in {1..10}; do
+    settings_local="${search_dir}/.claude/settings.local.json"
+    if [[ -f "$settings_local" ]] && command -v jq >/dev/null 2>&1; then
+      base_url="$(jq -r '.env.ANTHROPIC_BASE_URL // empty' "$settings_local" 2>/dev/null)"
+      if [[ -n "$base_url" && "$base_url" != "https://api.anthropic.com"* ]]; then
+        # Extract domain: https://muyuan.do/path → muyuan.do
+        provider_domain="$(printf '%s' "$base_url" | sed -E 's|^https?://([^/:]+).*|\1|')"
+      fi
+      break
     fi
-  fi
+    parent="$(dirname "$search_dir")"
+    [[ "$parent" == "$search_dir" ]] && break  # reached root
+    search_dir="$parent"
+  done
 fi
 nonnull "$provider_domain" && model_render="${model_render:+$model_render }${DIM}${provider_domain}${RESET}"
 

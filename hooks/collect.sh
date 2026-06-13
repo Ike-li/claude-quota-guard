@@ -157,14 +157,22 @@ else
   if command -v jq >/dev/null 2>&1; then
     cwd="$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // empty' 2>/dev/null)"
     if [[ -n "$cwd" ]]; then
-      settings_local="${cwd}/.claude/settings.local.json"
-      if [[ -f "$settings_local" ]]; then
-        base_url="$(jq -r '.env.ANTHROPIC_BASE_URL // empty' "$settings_local" 2>/dev/null)"
-        if [[ -n "$base_url" && "$base_url" != "https://api.anthropic.com"* ]]; then
-          provider_domain="$(printf '%s' "$base_url" | sed -E 's|^https?://([^/:]+).*|\1|')"
-          [[ -n "$provider_domain" ]] && line="${line:+$line · }${provider_domain}"
+      # Walk up directory tree to find .claude/settings.local.json (max 10 levels)
+      search_dir="$cwd"
+      for i in {1..10}; do
+        settings_local="${search_dir}/.claude/settings.local.json"
+        if [[ -f "$settings_local" ]]; then
+          base_url="$(jq -r '.env.ANTHROPIC_BASE_URL // empty' "$settings_local" 2>/dev/null)"
+          if [[ -n "$base_url" && "$base_url" != "https://api.anthropic.com"* ]]; then
+            provider_domain="$(printf '%s' "$base_url" | sed -E 's|^https?://([^/:]+).*|\1|')"
+            [[ -n "$provider_domain" ]] && line="${line:+$line · }${provider_domain}"
+          fi
+          break
         fi
-      fi
+        parent="$(dirname "$search_dir")"
+        [[ "$parent" == "$search_dir" ]] && break  # reached root
+        search_dir="$parent"
+      done
     fi
   fi
 

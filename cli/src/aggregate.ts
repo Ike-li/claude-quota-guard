@@ -92,23 +92,35 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
 
   // ── provider domain from .claude/settings.local.json ──
   // Prefer explicit opts.cwd (user-specified project root) over tx.cwd (may be
-  // a subdirectory after cd commands). Settings live in project root, not subdirs.
+  // a subdirectory after cd commands). Walk up the directory tree to find .claude/
+  // since transcript may end in a subdir but settings live at project root.
   let providerDomain: string | null = null;
-  const cwd: string | null = opts.cwd ?? tx.cwd ?? null;
+  let cwd: string | null = opts.cwd ?? tx.cwd ?? null;
   if (cwd) {
-    const settingsLocal = path.join(cwd, '.claude', 'settings.local.json');
-    try {
+    let searchDir = cwd;
+    let found = false;
+    // Walk up max 10 levels to find .claude/settings.local.json
+    for (let i = 0; i < 10; i++) {
+      const settingsLocal = path.join(searchDir, '.claude', 'settings.local.json');
       if (fs.existsSync(settingsLocal)) {
-        const settings = JSON.parse(fs.readFileSync(settingsLocal, 'utf8'));
-        const baseUrl = settings?.env?.ANTHROPIC_BASE_URL;
-        if (baseUrl && typeof baseUrl === 'string' && !baseUrl.startsWith('https://api.anthropic.com')) {
-          // Extract domain: https://muyuan.do/path → muyuan.do
-          const match = baseUrl.match(/^https?:\/\/([^/:]+)/);
-          if (match && match[1]) providerDomain = match[1];
+        try {
+          const settings = JSON.parse(fs.readFileSync(settingsLocal, 'utf8'));
+          const baseUrl = settings?.env?.ANTHROPIC_BASE_URL;
+          if (baseUrl && typeof baseUrl === 'string' && !baseUrl.startsWith('https://api.anthropic.com')) {
+            // Extract domain: https://muyuan.do/path → muyuan.do
+            const match = baseUrl.match(/^https?:\/\/([^/:]+)/);
+            if (match && match[1]) providerDomain = match[1];
+          }
+          found = true;
+          cwd = searchDir; // use the directory where we found .claude/
+          break;
+        } catch {
+          // Non-fatal: provider domain is advisory
         }
       }
-    } catch {
-      // Non-fatal: provider domain is advisory
+      const parent = path.dirname(searchDir);
+      if (parent === searchDir) break; // reached root
+      searchDir = parent;
     }
   }
 
