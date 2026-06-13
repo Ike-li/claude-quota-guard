@@ -114,6 +114,9 @@ if command -v quota-guard >/dev/null 2>&1; then
   activity_out="$(quota-guard _activity ${session_id:+--session "$session_id"} 2>/dev/null || echo "0	0")"
   agents_running="$(printf '%s' "$activity_out" | awk -F'\t' '{print $1+0}')"
   todos_pending="$(printf '%s' "$activity_out" | awk -F'\t' '{print $2+0}')"
+else
+  # Log when quota-guard isn't available — user should know activity tracking is offline
+  printf 'Notice: quota-guard cli not found; activity tracking disabled (agents/todos always 0)\n' >&2
 fi
 
 # ── write snapshot + export (skipped on a suspicious-zero glitch frame) ─
