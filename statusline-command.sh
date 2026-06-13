@@ -44,18 +44,47 @@ if [ "${CQG_STATUSLINE_RESPONSIVE:-true}" = "true" ]; then
 fi
 
 # Theme colors (loaded from theme file via load-config.sh)
-# Fallback to Catppuccin Mocha if theme didn't load
-RED="${CQG_THEME_RED:-\033[38;2;243;139;168m}"
-PEACH="${CQG_THEME_PEACH:-\033[38;2;250;179;135m}"
-YELLOW="${CQG_THEME_YELLOW:-\033[38;2;249;226;175m}"
-GREEN="${CQG_THEME_GREEN:-\033[38;2;166;227;161m}"
-SAPPHIRE="${CQG_THEME_SAPPHIRE:-\033[38;2;116;199;236m}"
-MAUVE="${CQG_THEME_MAUVE:-\033[38;2;203;166;247m}"
-SKY="${CQG_THEME_SKY:-\033[38;2;137;220;235m}"
-ROSE="${CQG_THEME_PINK:-\033[38;2;245;194;231m}"
-GOLD="${CQG_THEME_YELLOW:-\033[38;2;249;226;175m}"
-SUBTEXT="${CQG_THEME_SUBTEXT1:-\033[38;2;166;173;200m}"
-DIM="${CQG_THEME_OVERLAY0:-\033[38;2;108;112;134m}"
+# Fallback based on terminal capability: truecolor > 256color > 16color
+if [[ "$COLORTERM" == "truecolor" ]] || [[ "$COLORTERM" == "24bit" ]]; then
+  # Terminal supports 24-bit color
+  RED="${CQG_THEME_RED:-\033[38;2;243;139;168m}"
+  PEACH="${CQG_THEME_PEACH:-\033[38;2;250;179;135m}"
+  YELLOW="${CQG_THEME_YELLOW:-\033[38;2;249;226;175m}"
+  GREEN="${CQG_THEME_GREEN:-\033[38;2;166;227;161m}"
+  SAPPHIRE="${CQG_THEME_SAPPHIRE:-\033[38;2;116;199;236m}"
+  MAUVE="${CQG_THEME_MAUVE:-\033[38;2;203;166;247m}"
+  SKY="${CQG_THEME_SKY:-\033[38;2;137;220;235m}"
+  ROSE="${CQG_THEME_PINK:-\033[38;2;245;194;231m}"
+  GOLD="${CQG_THEME_YELLOW:-\033[38;2;249;226;175m}"
+  SUBTEXT="${CQG_THEME_SUBTEXT1:-\033[38;2;166;173;200m}"
+  DIM="${CQG_THEME_OVERLAY0:-\033[38;2;108;112;134m}"
+elif [[ "$TERM" == *"256color"* ]]; then
+  # Fallback to 256-color mode (ANSI 256)
+  RED="\033[38;5;204m"      # Light red
+  PEACH="\033[38;5;216m"    # Peach
+  YELLOW="\033[38;5;229m"   # Light yellow
+  GREEN="\033[38;5;151m"    # Light green
+  SAPPHIRE="\033[38;5;117m" # Light blue
+  MAUVE="\033[38;5;183m"    # Light purple
+  SKY="\033[38;5;117m"      # Cyan
+  ROSE="\033[38;5;218m"     # Pink
+  GOLD="\033[38;5;229m"     # Gold (same as yellow)
+  SUBTEXT="\033[38;5;249m"  # Gray
+  DIM="\033[38;5;240m"      # Dark gray
+else
+  # Fallback to basic 16 ANSI colors
+  RED="\033[91m"      # Bright red
+  PEACH="\033[33m"    # Yellow (closest to peach)
+  YELLOW="\033[93m"   # Bright yellow
+  GREEN="\033[92m"    # Bright green
+  SAPPHIRE="\033[94m" # Bright blue
+  MAUVE="\033[95m"    # Bright magenta
+  SKY="\033[96m"      # Bright cyan
+  ROSE="\033[95m"     # Bright magenta
+  GOLD="\033[93m"     # Bright yellow
+  SUBTEXT="\033[37m"  # White
+  DIM="\033[90m"      # Bright black (gray)
+fi
 RESET="\033[0m"
 
 # Color a percentage by threshold.
