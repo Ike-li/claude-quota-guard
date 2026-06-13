@@ -89,12 +89,26 @@ export function renderFrame(state: HudState, rows: number): string {
   // tokens + cost
   const t = state.usage.sessionTokens;
   const cost = state.usage.estimatedCostUsd;
+  const cacheSavings = state.usage.cacheSavingsUsd;
   out.push(
     C.sub('  tokens  ') +
       C.dim(`in ${fmtNum(t.input)} · out ${fmtNum(t.output)} · cache ${fmtNum(t.cacheCreation + t.cacheRead)} · total `) +
       C.sky(fmtNum(t.total)) +
       (cost !== null ? C.dim('  ·  ') + C.green('~' + fmtCost(cost)) : ''),
   );
+  if (cacheSavings !== null && cacheSavings > 0) {
+    out.push(C.sub('          ') + C.green(`saved ${fmtCost(cacheSavings)} via cache`));
+  }
+
+  // api calls
+  const api = state.usage.apiCalls;
+  if (api.total > 0) {
+    out.push(
+      C.sub('  api     ') +
+        C.dim(`${api.total} calls`) +
+        (api.errors > 0 ? C.dim(' · ') + C.red(`${api.errors} errors`) : ''),
+    );
+  }
   out.push('');
 
   // todos
@@ -133,6 +147,15 @@ export function renderFrame(state: HudState, rows: number): string {
       const target = tool.target ? C.dim(' ' + tool.target) : '';
       out.push(`    ${statusMark(tool.status)} ${tool.name}${target}`);
     }
+  }
+
+  // tool stats (top 5)
+  const toolStats = state.activity.toolStats;
+  if (toolStats.length > 0) {
+    const formatted = toolStats
+      .map((t) => `${t.count}× ${t.name}${t.errors > 0 ? ` ${C.red(`(${t.errors}✗)`)}` : ''}`)
+      .join(C.dim(' · '));
+    out.push(C.sub('  tools   ') + formatted);
   }
 
   // footer (pin to bottom if room)

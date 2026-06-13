@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseTranscript, findTranscript } from './transcript';
 import { readSnapshot, defaultSnapshotPath } from './snapshot';
-import { estimateCostByModel } from './format';
+import { estimateCostByModel, estimateCacheSavings } from './format';
 import { HUD_SCHEMA_VERSION, type HudState, type ContextState, type QuotaState } from './types';
 
 export interface AggregateOptions {
@@ -89,6 +89,7 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
   //    sessions (main agent + subagents) are no longer charged at one blanket
   //    rate. Total stays null if any token-bearing model is unpriceable.
   const { total: estimatedCostUsd, perModel: costByModel } = estimateCostByModel(tx.tokensByModel);
+  const cacheSavingsUsd = estimateCacheSavings(tx.tokensByModel);
 
   // ── provider domain from .claude/settings.local.json ──
   // Prefer explicit opts.cwd (user-specified project root) over tx.cwd (may be
@@ -146,6 +147,7 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
       todos: { total: todos.length, completed, inProgress, pending, items: todos },
       agents: { running: runningAgents, total: tx.agents.length, items: tx.agents },
       recentTools: tx.tools,
+      toolStats: tx.toolStats,
       skills: tx.skills,
       mcpServers: tx.mcpServers,
     },
@@ -154,6 +156,8 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
       estimatedCostUsd,
       costSource: estimatedCostUsd !== null ? 'estimate' : 'none',
       tokensByModel: costByModel,
+      apiCalls: tx.apiCalls,
+      cacheSavingsUsd,
     },
   };
 }

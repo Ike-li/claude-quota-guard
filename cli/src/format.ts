@@ -126,3 +126,24 @@ export function estimateCostByModel(
   }
   return { total: priceable ? total : null, perModel };
 }
+
+// Estimate cache savings: cache read tokens cost 0.1× input price, so reading
+// from cache instead of sending as fresh input saves 0.9× the input cost.
+// Returns null if any model is unpriceable (same conservative contract as
+// estimateCostByModel) or if there are no cache reads.
+export function estimateCacheSavings(buckets: ModelTokenBucket[]): number | null {
+  let totalSavings = 0;
+  let hasCacheReads = false;
+  for (const b of buckets) {
+    if (b.usage.cacheRead === 0) continue;
+    hasCacheReads = true;
+    const p = pricingFor(b.model);
+    if (!p) return null; // unknown model → can't price → return null
+    // Cache read cost = 0.1 × input_price
+    // Full input cost would be = 1.0 × input_price
+    // Savings = (1.0 - 0.1) × input_price = 0.9 × input_price
+    const savings = (b.usage.cacheRead * p.inPerM * 0.9) / 1_000_000;
+    totalSavings += savings;
+  }
+  return hasCacheReads ? totalSavings : null;
+}

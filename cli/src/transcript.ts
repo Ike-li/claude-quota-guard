@@ -149,6 +149,8 @@ function emptyData(): TranscriptData {
     tokensByModel: [],
     contextTokens: null,
     turns: 0,
+    apiCalls: { total: 0, errors: 0 },
+    toolStats: [],
   };
 }
 
@@ -177,6 +179,7 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
   const queueCompletion = new Map<string, string>();
   let lastUsageKey: string | undefined;
   let turns = 0;
+  let apiErrors = 0;
 
   try {
     const rl = readline.createInterface({
@@ -314,6 +317,7 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
           if (tool) {
             tool.status = block.is_error ? 'error' : 'completed';
             tool.endedAt = when;
+            if (block.is_error) apiErrors++; // Count tool errors as API-level failures
           }
           const agent = agentMap.get(block.tool_use_id);
           if (agent && !agent.background) agent.endedAt = when;
@@ -341,6 +345,19 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
   for (const bucket of tokensByModel.values()) {
     bucket.total = bucket.input + bucket.output + bucket.cacheCreation + bucket.cacheRead;
   }
+
+  // Aggregate tool statistics: count calls and errors per tool name
+  const toolStatsMap = new Map<string, { count: number; errors: number }>();
+  for (const tool of toolMap.values()) {
+    const stat = toolStatsMap.get(tool.name) || { count: 0, errors: 0 };
+    stat.count++;
+    if (tool.status === 'error') stat.errors++;
+    toolStatsMap.set(tool.name, stat);
+  }
+  const toolStats = Array.from(toolStatsMap, ([name, stat]) => ({ name, ...stat }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5); // Top 5
+
   data.tools = Array.from(toolMap.values()).slice(-20);
   data.agents = Array.from(agentMap.values()).slice(-10);
   data.todos = todos;
@@ -349,6 +366,8 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
   data.sessionTokens = tokens;
   data.tokensByModel = Array.from(tokensByModel, ([model, usage]) => ({ model, usage }));
   data.turns = turns;
+  data.apiCalls = { total: turns, errors: apiErrors };
+  data.toolStats = toolStats;
 
   cache.set(transcriptPath, { mtimeMs: stat.mtimeMs, size: stat.size, data });
   return data;

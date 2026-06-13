@@ -34,6 +34,12 @@ export interface ToolItem {
   endedAt: string | null;
 }
 
+export interface ToolStat {
+  name: string;
+  count: number;
+  errors: number;
+}
+
 export interface SessionTokenUsage {
   input: number;
   output: number;
@@ -80,6 +86,13 @@ export interface TranscriptData {
   contextTokens: number | null;
   // Conversation turns count (assistant messages, deduplicated).
   turns: number;
+  // API call statistics (approximate: turns = successful calls, tool errors ≈ failures).
+  apiCalls: {
+    total: number; // = turns (each assistant message = 1 API call)
+    errors: number; // tool errors (not true API errors like rate limits)
+  };
+  // Tool usage statistics: top tools by call count.
+  toolStats: ToolStat[];
 }
 
 // Quota numbers sourced from the bash side's snapshot/export — may be absent
@@ -128,6 +141,7 @@ export interface HudState {
     };
     agents: { running: number; total: number; items: AgentItem[] };
     recentTools: ToolItem[];
+    toolStats: ToolStat[]; // Top 5 tools by call count
     skills: string[];
     mcpServers: string[];
   };
@@ -138,5 +152,12 @@ export interface HudState {
     // Per-model cost breakdown. estimatedCostUsd is the sum of these (null if any
     // token-bearing bucket is unpriceable). Empty when no tokens/models seen.
     tokensByModel: ModelCostBucket[];
+    // API call statistics (approximate).
+    apiCalls: {
+      total: number; // = conversation turns (each assistant message = 1 API call)
+      errors: number; // tool errors (proxy for failures; true API errors not in transcript)
+    };
+    // Cache savings: 0.9× input cost for cache_read tokens (read at 0.1× vs 1.0× fresh input).
+    cacheSavingsUsd: number | null;
   };
 }
