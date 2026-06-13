@@ -18,12 +18,12 @@ err() { printf 'ERROR: %s\n' "$*" >&2; }
 # ── 1. dependency check ────────────────────────────────────────────────
 say "→ Checking dependencies..."
 missing=()
-for c in bash awk date stat jq; do
+for c in bash awk date stat jq node npm; do
   command -v "$c" >/dev/null 2>&1 || missing+=("$c")
 done
 if (( ${#missing[@]} )); then
   err "Missing required commands: ${missing[*]}"
-  err "Install them and re-run. (jq is required to safely edit settings.json.)"
+  err "Install them and re-run. (jq: settings.json editing; node+npm: cli build.)"
   exit 1
 fi
 say "  ✓ all present"
@@ -118,6 +118,28 @@ else
   printf '\n' >> "$CLAUDE_MD"
   cat "$tpl" >> "$CLAUDE_MD"
   say "→ Appended convergence protocol to CLAUDE.md."
+fi
+
+# ── 7. build cli + symlink to PATH ─────────────────────────────────────
+say "→ Building the dashboard CLI (cli/)..."
+(cd "$SELF_DIR/cli" && npm ci --silent && npm run build --silent) || {
+  err "CLI build failed. Check that Node ≥18 is installed and cli/package.json is intact."
+  exit 1
+}
+say "  ✓ built dist/cli.js"
+
+BIN_TARGET="$HOME/.local/bin"
+mkdir -p "$BIN_TARGET"
+ln -sf "$SELF_DIR/bin/quota-guard" "$BIN_TARGET/quota-guard"
+say "  ✓ symlinked $BIN_TARGET/quota-guard → bin/quota-guard"
+
+# Advise if ~/.local/bin is not on PATH (common on fresh systems).
+if [[ ":$PATH:" != *":$BIN_TARGET:"* ]]; then
+  say ""
+  say "⚠️  $BIN_TARGET is not on your \$PATH."
+  say "   Add it to use 'quota-guard' directly (no path prefix):"
+  say "     echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.$(basename "$SHELL")rc"
+  say "     source ~/.$(basename "$SHELL")rc"
 fi
 
 say ""

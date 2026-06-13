@@ -3,7 +3,16 @@
 # Keeps the bash-first repo layout: the Node/TS dashboard lives in cli/, this
 # wrapper just execs it so `quota-guard` can sit on PATH (install.sh may symlink).
 set -euo pipefail
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Resolve symlinks to find the real script location (works on macOS + Linux).
+SCRIPT="${BASH_SOURCE[0]}"
+while [[ -L "$SCRIPT" ]]; do
+  DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
+  SCRIPT="$(readlink "$SCRIPT")"
+  [[ "$SCRIPT" != /* ]] && SCRIPT="$DIR/$SCRIPT"
+done
+SELF_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
+
 DIST="$SELF_DIR/../cli/dist/cli.js"
 if [[ ! -f "$DIST" ]]; then
   printf 'quota-guard: CLI not built.\n  Run: (cd %s/../cli && npm install && npm run build)\n' "$SELF_DIR" >&2

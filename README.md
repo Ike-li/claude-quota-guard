@@ -56,7 +56,7 @@ way. All thresholds are configurable.
 
 ## Install
 
-Requires: `bash`, `awk`, `date`, `stat`, `jq`.
+Requires: `bash`, `awk`, `date`, `stat`, `jq`, `node` (≥18), `npm`.
 
 ```bash
 git clone https://github.com/Ike-li/claude-quota-guard
@@ -71,6 +71,7 @@ The installer:
   or **replace** it
 - edits `~/.claude/settings.json` with `jq` (idempotent, backed up)
 - appends the convergence protocol to `~/.claude/CLAUDE.md`
+- builds the dashboard CLI (`cli/`) and symlinks `quota-guard` to `~/.local/bin`
 
 Restart Claude Code (or start a new session) to activate.
 
@@ -109,12 +110,16 @@ Node/TS layer feeds *you and other tools*: it reads the transcript JSONL directl
 (works in `claude -p` / SDK headless mode, where no statusLine ever fires) and
 merges it with the quota snapshot into one view.
 
+The installer builds `cli/` and symlinks `quota-guard` to `~/.local/bin`, so you
+can run it directly:
+
 ```sh
-cd cli && npm install && npm run build      # one-time; produces cli/dist
-./bin/quota-guard watch                      # live full-screen TUI dashboard
-./bin/quota-guard query                      # one-shot, human-readable
-./bin/quota-guard query --json               # one-shot JSON for other apps
+quota-guard watch                            # live full-screen TUI dashboard
+quota-guard query                            # one-shot, human-readable
+quota-guard query --json                     # one-shot JSON for other apps
 ```
+
+If `~/.local/bin` isn't on your `$PATH`, the installer will tell you how to add it.
 
 - **`watch`** — a zero-dependency TUI (Catppuccin) showing context, 5h/7d quota,
   todos, running agents, recent tools, cumulative tokens and estimated cost,
