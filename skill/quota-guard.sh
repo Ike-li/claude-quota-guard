@@ -47,6 +47,16 @@ case "$cmd" in
       exit 0
     fi
 
+    # Validate theme exists
+    theme_file="$PROJECT_ROOT/themes/${theme_name}.sh"
+    if [ ! -f "$theme_file" ]; then
+      echo "❌ Theme not found: $theme_name"
+      echo ""
+      echo "Available themes:"
+      ls "$PROJECT_ROOT/themes/" | sed 's/\.sh$//' | sed 's/^/  - /'
+      exit 1
+    fi
+
     config_file="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/quota-guard/settings.json"
     if [ ! -f "$config_file" ]; then
       mkdir -p "$(dirname "$config_file")"
@@ -73,6 +83,21 @@ case "$cmd" in
       echo "Usage: /quota-guard preset <name>"
       exit 0
     fi
+
+    # Validate preset
+    case "$preset_name" in
+      minimal|compact|full)
+        ;;
+      *)
+        echo "❌ Invalid preset: $preset_name"
+        echo ""
+        echo "Available presets:"
+        echo "  - minimal  (quota + context only)"
+        echo "  - compact  (single line, essential info)"
+        echo "  - full     (dual line, all features)"
+        exit 1
+        ;;
+    esac
 
     config_file="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/quota-guard/settings.json"
     if [ ! -f "$config_file" ]; then

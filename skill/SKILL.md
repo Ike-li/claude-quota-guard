@@ -16,6 +16,11 @@ Monitor Claude Code's 5h/7d rate limits and context usage. Automatically injects
 /quota-guard watch      # Launch live dashboard
 ```
 
+**Note**: If you cloned manually (not via plugin), ensure the skill script is executable:
+```bash
+chmod +x ~/.claude/skills/quota-guard/skill/quota-guard.sh
+```
+
 ## Commands
 
 | Command | Description |
