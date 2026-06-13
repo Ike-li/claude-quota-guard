@@ -133,6 +133,16 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  // Internal command for collect.sh: emit running-agent + pending-todo counts
+  // (tab-separated) to append to the snapshot. Not in USAGE; collect.sh calls it.
+  if (args.command === '_activity') {
+    const state = await aggregate(opts);
+    const running = state.activity.agents.running;
+    const pending = state.activity.todos.total - state.activity.todos.completed;
+    process.stdout.write(`${running}\t${pending}\n`);
+    return 0;
+  }
+
   process.stderr.write(`unknown command: ${args.command}\n\n${USAGE}\n`);
   return 2;
 }

@@ -22,7 +22,7 @@ CQG_NOTICE_STAMP="$STAMP"
 EOF
 
 pass=0; fail=0
-# snap <fields...> : write tab-joined snapshot, fresh mtime
+# snap <fields...> : write tab-joined 8-field snapshot (5h 7d proj reset reset ctx agents todos), fresh mtime
 snap() { local IFS=$'\t'; printf '%s\n' "$*" > "$SNAP"; }
 # run <mode> : run guard with given CQG_MODE (default auto)
 run() { CQG_CONFIG="$CFG" CQG_MODE="${1:-auto}" bash "$GUARD" </dev/null; }
@@ -37,44 +37,44 @@ expect() {
 }
 
 echo "== tier + mode matrix =="
-rm -f "$STAMP"; snap 40 9 45 2h 5d 30
+rm -f "$STAMP"; snap 40 9 45 2h 5d 30 0 0
 expect "sub: ctx30/5h40 → silent" EMPTY "$(run)"
 
-rm -f "$STAMP"; snap 92 9 110 1h 5d 30
+rm -f "$STAMP"; snap 92 9 110 1h 5d 30 0 0
 expect "sub: 5h92 → QUOTA-LOW" "QUOTA-LOW" "$(run subscription)"
-expect "sub: 5h92 shows 5h line" "5h usage: 92%" "$(run subscription)"
+expect "sub: 5h92 shows 5h in status" "5h 92%" "$(run subscription)"
 
-rm -f "$STAMP"; snap 17 12 164 4h 5d 20
+rm -f "$STAMP"; snap 17 12 164 4h 5d 20 0 0
 expect "sub: 5h17 + proj164 → silent (proj not a trigger)" EMPTY "$(run subscription)"
 
-rm -f "$STAMP"; snap 40 9 45 2h 5d 88
+rm -f "$STAMP"; snap 40 9 45 2h 5d 88 0 0
 expect "sub: ctx88 → QUOTA-LOW" "QUOTA-LOW" "$(run)"
 
-rm -f "$STAMP"; snap '' '' '' '' '' 90
+rm -f "$STAMP"; snap '' '' '' '' '' 90 0 0
 expect "relay: ctx90 (empty 5h) → QUOTA-LOW" "QUOTA-LOW" "$(run relay)"
 
-rm -f "$STAMP"; snap 99 99 150 1h 5d 20
+rm -f "$STAMP"; snap 99 99 150 1h 5d 20 0 0
 expect "relay: fake 5h99/ctx20 → silent (rate ignored)" EMPTY "$(run relay)"
 
 echo "== notice tier + dedup =="
-rm -f "$STAMP"; snap 0 0 0 - - 60
+rm -f "$STAMP"; snap 0 0 0 - - 60 0 0
 expect "ctx60 first → CTX-NOTICE" "CTX-NOTICE" "$(run)"
 expect "ctx60 again → silent (dedup)" EMPTY "$(run)"
 
-snap 0 0 0 - - 30
+snap 0 0 0 - - 30 0 0
 expect "ctx30 → silent (clears stamp)" EMPTY "$(run)"
-snap 0 0 0 - - 60
+snap 0 0 0 - - 60 0 0
 expect "ctx60 re-cross → CTX-NOTICE again" "CTX-NOTICE" "$(run)"
 
 echo "== freshness =="
-rm -f "$STAMP"; snap 0 0 0 - - 90
+rm -f "$STAMP"; snap 0 0 0 - - 90 0 0
 touch -t 200001010000 "$SNAP"
 expect "stale snapshot → silent" EMPTY "$(run)"
 
 echo "== per-session snapshot precedence =="
 rm -f "$STAMP" "${STAMP}-S1"
-snap 0 0 0 - - 30                                  # global: ctx 30 (would be silent)
-printf '0\t0\t0\t-\t-\t90\n' > "${SNAP}-S1"        # session S1: ctx 90 (would converge)
+snap 0 0 0 - - 30 0 0                                # global: ctx 30 (would be silent)
+printf '0\t0\t0\t-\t-\t90\t0\t0\n' > "${SNAP}-S1"    # session S1: ctx 90 (would converge)
 out="$(CQG_CONFIG="$CFG" bash "$GUARD" <<< '{"session_id":"S1"}')"
 expect "guard prefers per-session (ctx90) over global (ctx30)" "QUOTA-LOW" "$out"
 rm -f "${SNAP}-S1" "${STAMP}-S1"
@@ -200,26 +200,48 @@ if command -v jq >/dev/null 2>&1; then
 fi
 
 echo "== i18n =="
-rm -f "$STAMP"; snap 40 9 45 2h 5d 88
+rm -f "$STAMP"; snap 40 9 45 2h 5d 88 1 0
 CFG_ZH="$TMP/config.zh.sh"; sed 's/CQG_LANG=en/CQG_LANG=zh/' "$CFG" > "$CFG_ZH"
 out="$(CQG_CONFIG="$CFG_ZH" bash "$GUARD" </dev/null)"
-expect "zh: ctx88 → 收敛协议" "收敛协议" "$out"
+expect "zh: ctx88 + 1 agent → 收敛协议" "收敛协议" "$out"
 
 echo "== configurable threshold =="
-rm -f "$STAMP"; snap 0 0 0 - - 70
+rm -f "$STAMP"; snap 0 0 0 - - 70 0 0
 CFG_T="$TMP/config.t.sh"; sed 's/CQG_CTX_HALT=85/CQG_CTX_HALT=65/' "$CFG" > "$CFG_T"
 out="$(CQG_CONFIG="$CFG_T" bash "$GUARD" </dev/null)"
 expect "ctx70 with HALT=65 → QUOTA-LOW" "QUOTA-LOW" "$out"
 
 echo "== auto-detection from snapshot data =="
-rm -f "$STAMP"; snap '' '' '' '' '' 30
+rm -f "$STAMP"; snap '' '' '' '' '' 30 0 0
 expect "auto: empty 5h field → relay-like (rate skipped, ctx check only)" EMPTY "$(run auto)"
 
-rm -f "$STAMP"; snap 99 0 150 1h - 20
+rm -f "$STAMP"; snap 99 0 150 1h - 20 0 0
 expect "auto: 5h=99 ctx=20 → rate active, 99>=85 → QUOTA-LOW" "QUOTA-LOW" "$(run auto)"
 
-rm -f "$STAMP"; snap 40 0 45 2h - 30
+rm -f "$STAMP"; snap 40 0 45 2h - 30 0 0
 expect "auto: 5h=40 → rate active, 40<85 → silent" EMPTY "$(run auto)"
+
+echo "== activity-aware convergence (agents/todos) =="
+rm -f "$STAMP"; snap 40 9 45 2h 5d 90 0 0
+out="$(run)"
+expect "ctx90 + no work (0 agents, 0 todos) → clean checkpoint relay" "clean checkpoint" "$out"
+if [[ "$out" == *"Convergence protocol triggered"* ]]; then
+  echo "  ✗ relay should NOT show full convergence footer"; ((fail++))
+else
+  echo "  ✓ relay does not show full convergence footer"; ((pass++))
+fi
+
+rm -f "$STAMP"; snap 40 9 45 2h 5d 90 1 0
+out="$(run)"
+expect "ctx90 + 1 agent running → full convergence" "Convergence protocol triggered" "$out"
+
+rm -f "$STAMP"; snap 40 9 45 2h 5d 90 0 3
+out="$(run)"
+expect "ctx90 + 3 todos pending → full convergence" "Convergence protocol triggered" "$out"
+
+rm -f "$STAMP"; snap 40 9 45 2h 5d 90 2 1
+out="$(run)"
+expect "ctx90 + agents + todos → full convergence" "Convergence protocol triggered" "$out"
 
 echo ""
 echo "Result: $pass passed, $fail failed"

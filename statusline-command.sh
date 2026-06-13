@@ -269,8 +269,11 @@ fi
 
 # ---- current quota snapshot (unthrottled, for the convergence hook) ----
 # Delegates to shared lib/snapshot.sh to ensure consistency with collect.sh.
+# statusline-command.sh has no transcript access, so agents/todos are always 0
+# (the guard's activity-aware logic only kicks in when collect.sh writes the snapshot).
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
-cqg_write_snapshot "${five_int:-}" "${seven_int:-}" "${five_proj:-}" "${five_reset:-}" "${seven_reset:-}" "${used_int:-}" "$session_id" || {
+cqg_write_snapshot "${five_int:-}" "${seven_int:-}" "${five_proj:-}" "${five_reset:-}" "${seven_reset:-}" "${used_int:-}" \
+  "0" "0" "$session_id" || {
   printf 'Warning: Failed to write quota snapshot\n' >&2
 }
 

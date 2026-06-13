@@ -26,20 +26,22 @@ Three pieces connected by a one-line tab-separated snapshot file (`~/.claude/.qu
 
 | Piece | Role | Trigger |
 |---|---|---|
-| `collect.sh` | Reads Claude Code's status-line JSON from stdin, extracts rate-limit + ctx fields, writes snapshot | Every 10s (statusLine) |
+| `collect.sh` | Reads Claude Code's status-line JSON from stdin, extracts rate-limit + ctx fields + activity (via `quota-guard _activity`), writes snapshot | Every 10s (statusLine) |
 | `.quota-now` | Bridge file — cheap, unthrottled, atomically written via mktemp+mv | — |
 | `guard.sh` | Reads snapshot, evaluates tiers, echoes a signal to stdout → injected into context | Every prompt (UserPromptSubmit) |
 | `CLAUDE.md` block | Tells the model what to do when it sees the signal | Static rules |
 
 The key idea: numbers go stale if hard-coded into CLAUDE.md, so the **live number** is injected via a hook and only the **rules** live in CLAUDE.md.
 
-### Snapshot format (tab-separated, single line, 6 fields)
+### Snapshot format (tab-separated, single line, 8 fields)
 
 ```
-5h% \t 7d% \t 5h_proj% \t 5h_reset \t 7d_reset \t ctx%
+5h% \t 7d% \t 5h_proj% \t 5h_reset \t 7d_reset \t ctx% \t agents_running \t todos_pending
 ```
 
 Fields absent on API/relay mode are written empty. `guard.sh` parses them with `awk -F'\t'` (robust to empty fields; `read` collapses them).
+
+**agents_running / todos_pending**: extracted by `collect.sh` via `quota-guard _activity` (reads transcript JSONL). Used by guard.sh to distinguish "unsaved work" (converge immediately) from "clean checkpoint" (relay status, user decides).
 
 **ctx fallback:** `collect.sh` prefers Claude Code's native `context_window.used_percentage`, but treats absent **or `0`** as "not yet populated" (fresh session / first frame after a compact, when `current_usage` already holds real initial-context tokens). In that case it recomputes ctx from `current_usage` tokens ÷ `context_window_size` so the snapshot isn't under-reported. Mirrors claude-hud's `getContextPercent`.
 
@@ -66,7 +68,7 @@ Sourced by `collect.sh`, `guard.sh`, and `statusline-command.sh`. Provides:
 
 | Condition | Signal | Action |
 |---|---|---|
-| ctx ≥ CQG_CTX_HALT **or** 5h ≥ CQG_RATE_HALT | `[QUOTA-LOW]` | Converge (handoff + stop) |
+| ctx ≥ CQG_CTX_HALT **or** 5h ≥ CQG_RATE_HALT | `[QUOTA-LOW]` | **If** agents_running > 0 **or** todos_pending > 0: converge (handoff + stop). **Else**: relay status, user decides. |
 | CQG_CTX_NOTICE ≤ ctx < CQG_CTX_HALT | `[CTX-NOTICE]` | Advise once (deduped via stamp file) |
 | Below thresholds | silent | — |
 

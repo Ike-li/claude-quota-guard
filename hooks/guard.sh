@@ -87,10 +87,12 @@ fi
 
 # ── snapshot field indices (tab-separated, single line) ──────────────────
 _FLD_5H=1; _FLD_7D=2; _FLD_PROJ=3; _FLD_5H_RESET=4; _FLD_7D_RESET=5; _FLD_CTX=6
+_FLD_AGENTS=7; _FLD_TODOS=8
 _snap_field() { awk -F'\t' -v c="$1" 'NR==1{print $c}' "$CQG_SNAPSHOT"; }
 usage_5h="$(_snap_field $_FLD_5H)"; usage_7d="$(_snap_field $_FLD_7D)"
 proj_5h="$(_snap_field $_FLD_PROJ)"; five_reset="$(_snap_field $_FLD_5H_RESET)"
 ctx="$(_snap_field $_FLD_CTX)"
+agents_running="$(_snap_field $_FLD_AGENTS)"; todos_pending="$(_snap_field $_FLD_TODOS)"
 
 # ── rate-tier gate: active only when snapshot has real rate-limit data ──
 # CQG_MODE: auto (detect from snapshot data) | subscription (force on) | relay (force off)
@@ -108,9 +110,10 @@ esac
 # anything non-numeric (whitespace, multiple dots, garbage) to 0.
 _as_int() { printf '%.0f' "$1" 2>/dev/null || echo 0; }
 usage_5h="$(_as_int "$usage_5h")"; proj_5h="$(_as_int "$proj_5h")"; ctx="$(_as_int "$ctx")"
+agents_running="$(_as_int "$agents_running")"; todos_pending="$(_as_int "$todos_pending")"
 
 # log prefix shared by all remaining decision points
-_lp="sess=${_session_id:-?} snap=${_snap_label} ctx=${ctx} 5h=${usage_5h}"
+_lp="sess=${_session_id:-?} snap=${_snap_label} ctx=${ctx} 5h=${usage_5h} ag=${agents_running} td=${todos_pending}"
 
 # ── evaluate tiers ─────────────────────────────────────────────────────
 quota_trigger=false
@@ -121,6 +124,10 @@ if [[ "$_rate_available" == "true" ]]; then
 fi
 ctx_trigger=false
 (( ctx >= CQG_CTX_HALT )) && ctx_trigger=true
+
+# unsaved work = running agents or pending todos
+unsaved_work=false
+(( agents_running > 0 || todos_pending > 0 )) && unsaved_work=true
 
 # ── localized strings ──────────────────────────────────────────────────
 if [[ "$CQG_LANG" == "zh" ]]; then
@@ -147,13 +154,32 @@ if [[ "$quota_trigger" == "true" || "$ctx_trigger" == "true" ]]; then
   _reason=""
   [[ "$ctx_trigger"   == "true" ]] && _reason="${_reason}ctx"
   [[ "$quota_trigger" == "true" ]] && _reason="${_reason:+$_reason+}5h"
-  _log "$_lp → QUOTA-LOW(${_reason})"
-  echo "---"; echo "$L_HALT_HDR"; echo ""; echo "$L_STATE"
-  [[ "$ctx_trigger" == "true" ]] && echo "$L_CTX"
-  if [[ "$quota_trigger" == "true" ]]; then
-    echo "$L_5H"; echo "$L_PROJ"; echo "$L_RESET"; echo "$L_7D"
+
+  # Decision: converge (write handoff) vs relay (report status only)
+  if [[ "$unsaved_work" == "true" ]]; then
+    # Unsaved work present → full convergence protocol
+    _log "$_lp → QUOTA-LOW(${_reason}) work=yes → CONVERGE"
+    echo "---"; echo "$L_HALT_HDR"; echo ""; echo "$L_STATE"
+    [[ "$ctx_trigger" == "true" ]] && echo "$L_CTX"
+    if [[ "$quota_trigger" == "true" ]]; then
+      echo "$L_5H"; echo "$L_PROJ"; echo "$L_RESET"; echo "$L_7D"
+    fi
+    echo ""; echo "$L_FOOT"; echo "---"
+  else
+    # Clean checkpoint → relay status, user decides
+    _log "$_lp → QUOTA-LOW(${_reason}) work=no → RELAY"
+    if [[ "$CQG_LANG" == "zh" ]]; then
+      echo "---"; echo "⚠️  [QUOTA-LOW] 资源接近限制"; echo ""
+      echo "状态: ctx ${ctx}%, 5h ${usage_5h}%${five_reset:+ (↻$five_reset)}, proj ${proj_5h}%"
+      echo ""; echo "当前处于**干净检查点**(无运行中 agent、无未完成 todo)。"
+      echo "是否暂停由你决定。要继续的话忽略额度直接说任务。"; echo "---"
+    else
+      echo "---"; echo "⚠️  [QUOTA-LOW] Resources nearing limit"; echo ""
+      echo "Status: ctx ${ctx}%, 5h ${usage_5h}%${five_reset:+ (↻$five_reset)}, proj ${proj_5h}%"
+      echo ""; echo "Currently at a **clean checkpoint** (no running agents, no pending todos)."
+      echo "Whether to pause is your call. To continue, just state the task."; echo "---"
+    fi
   fi
-  echo ""; echo "$L_FOOT"; echo "---"
   exit 0
 fi
 

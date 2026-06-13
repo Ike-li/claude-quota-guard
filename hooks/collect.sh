@@ -105,12 +105,24 @@ five_proj="$(cqg_five_hour_projection "$five_int" "$five_reset_at")"
 five_reset="$(cqg_fmt_reset_delta "$five_reset_at")"
 seven_reset="$(cqg_fmt_reset_delta "$seven_reset_at")"
 
+# ── extract activity state (running agents + pending todos) ────────────
+# Delegate to quota-guard cli (already parses transcript); falls back to 0|0
+# if cli unavailable or transcript missing. Non-fatal: activity is advisory.
+agents_running=0
+todos_pending=0
+if command -v quota-guard >/dev/null 2>&1; then
+  activity_out="$(quota-guard _activity ${session_id:+--session "$session_id"} 2>/dev/null || echo "0	0")"
+  agents_running="$(printf '%s' "$activity_out" | awk -F'\t' '{print $1+0}')"
+  todos_pending="$(printf '%s' "$activity_out" | awk -F'\t' '{print $2+0}')"
+fi
+
 # ── write snapshot + export (skipped on a suspicious-zero glitch frame) ─
 if [[ "$suspicious_zero" == "true" ]]; then
   # Glitch frame: keep the previous snapshot rather than clobber it with ctx=0.
   printf 'Notice: suspicious zero-usage frame; preserving previous snapshot\n' >&2
 else
-  cqg_write_snapshot "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" "$session_id" || {
+  cqg_write_snapshot "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" \
+    "$agents_running" "$todos_pending" "$session_id" || {
     printf 'Warning: Failed to write quota snapshot\n' >&2
   }
 

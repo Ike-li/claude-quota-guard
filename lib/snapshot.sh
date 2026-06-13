@@ -51,17 +51,17 @@ cqg_sanitize_session_id() {
 }
 
 # Write a snapshot atomically (both global and per-session if session_id provided).
-# Args: five_int seven_int five_proj five_reset seven_reset ctx_int session_id
+# Args: five_int seven_int five_proj five_reset seven_reset ctx_int agents_running todos_pending session_id
 # Env:  CQG_SNAPSHOT (base path, e.g., ~/.claude/.quota-now)
 # Returns: 0 on success, 1 on failure
 cqg_write_snapshot() {
   local five_int="$1" seven_int="$2" five_proj="$3"
   local five_reset="$4" seven_reset="$5" ctx_int="$6"
-  local session_id="$7"
+  local agents_running="$7" todos_pending="$8" session_id="$9"
 
-  # Validate all required fields are present (empty is ok, but must be 6 fields)
-  if [[ $# -lt 6 ]]; then
-    printf 'cqg_write_snapshot: insufficient arguments (got %d, need 6-7)\n' "$#" >&2
+  # Validate all required fields are present (empty is ok, but must be 8 fields + optional session)
+  if [[ $# -lt 8 ]]; then
+    printf 'cqg_write_snapshot: insufficient arguments (got %d, need 8-9)\n' "$#" >&2
     return 1
   fi
 
@@ -72,8 +72,9 @@ cqg_write_snapshot() {
   fi
 
   local snap_line
-  snap_line="$(printf '%s\t%s\t%s\t%s\t%s\t%s' \
-    "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int")"
+  snap_line="$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
+    "$five_int" "$seven_int" "$five_proj" "$five_reset" "$seven_reset" "$ctx_int" \
+    "$agents_running" "$todos_pending")"
 
   _cqg_write_file() {
     local dest="$1" tmp
