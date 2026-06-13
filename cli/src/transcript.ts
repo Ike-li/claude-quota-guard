@@ -148,6 +148,7 @@ function emptyData(): TranscriptData {
     sessionTokens: { input: 0, output: 0, cacheCreation: 0, cacheRead: 0, total: 0 },
     tokensByModel: [],
     contextTokens: null,
+    turns: 0,
   };
 }
 
@@ -175,6 +176,7 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
   const tokensByModel = new Map<string, SessionTokenUsage>();
   const queueCompletion = new Map<string, string>();
   let lastUsageKey: string | undefined;
+  let turns = 0;
 
   try {
     const rl = readline.createInterface({
@@ -224,6 +226,7 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
         const u = entry.message.usage;
         const key = `${u.input_tokens}|${u.output_tokens}|${u.cache_creation_input_tokens}|${u.cache_read_input_tokens}`;
         if (key !== lastUsageKey) {
+          turns++; // Count unique assistant messages as conversation turns
           tokens.input += num(u.input_tokens);
           tokens.output += num(u.output_tokens);
           tokens.cacheCreation += num(u.cache_creation_input_tokens);
@@ -345,6 +348,7 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
   data.mcpServers = Array.from(mcpSet);
   data.sessionTokens = tokens;
   data.tokensByModel = Array.from(tokensByModel, ([model, usage]) => ({ model, usage }));
+  data.turns = turns;
 
   cache.set(transcriptPath, { mtimeMs: stat.mtimeMs, size: stat.size, data });
   return data;

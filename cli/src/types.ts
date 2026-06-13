@@ -78,6 +78,8 @@ export interface TranscriptData {
   // Best-effort current context occupancy, in tokens: the most recent
   // assistant turn's prompt size (input + cache_read + cache_creation).
   contextTokens: number | null;
+  // Conversation turns count (assistant messages, deduplicated).
+  turns: number;
 }
 
 // Quota numbers sourced from the bash side's snapshot/export — may be absent
@@ -112,6 +114,7 @@ export interface HudState {
     transcriptPath: string | null;
     startedAt: string | null;
     lastActivityAt: string | null;
+    turns: number | null;
   };
   quota: QuotaState;
   context: ContextState;

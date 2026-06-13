@@ -138,6 +138,7 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
       transcriptPath,
       startedAt: tx.startedAt,
       lastActivityAt: tx.lastActivityAt,
+      turns: tx.turns,
     },
     quota,
     context,

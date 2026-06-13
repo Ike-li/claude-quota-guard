@@ -46,6 +46,7 @@ export function renderFrame(state: HudState, rows: number): string {
   out.push(`${title} ${C.sub('·')} ${C.sapphire(name)}${s.model ? ' ' + C.dim(s.model) : ''}${s.providerDomain ? ' ' + C.dim(s.providerDomain) : ''}`);
   const loc = `${s.cwd ? '📁 ' + s.cwd.split('/').pop() : ''}${s.gitBranch ? C.yellow('  ' + s.gitBranch) : ''}`;
   if (loc.trim()) out.push(C.dim('  ' + loc));
+  if (s.turns !== null && s.turns > 0) out.push(C.dim(`  ${s.turns} turns`));
   out.push('');
 
   // quota

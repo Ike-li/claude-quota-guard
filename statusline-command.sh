@@ -277,6 +277,16 @@ cqg_write_snapshot "${five_int:-}" "${seven_int:-}" "${five_proj:-}" "${five_res
   printf 'Warning: Failed to write quota snapshot\n' >&2
 }
 
+# ---- read agents/todos from snapshot for display ----
+agents_running=0
+todos_pending=0
+snap_file="${CQG_SNAPSHOT}${session_id:+-$session_id}"
+if [ -f "$snap_file" ]; then
+  snap_data=$(cat "$snap_file" 2>/dev/null)
+  agents_running=$(printf '%s' "$snap_data" | awk -F'\t' '{print $7+0}')
+  todos_pending=$(printf '%s' "$snap_data" | awk -F'\t' '{print $8+0}')
+fi
+
 # ================= line 1: live status =================
 # group: location (project + branch)
 loc_render="${PEACH}📁 ${project_name}${RESET}"
@@ -314,11 +324,17 @@ ctxcache_render="$ctx_render"
 nonnull "$cache_render" && ctxcache_render="${ctxcache_render:+$ctxcache_render${DIM} · ${RESET}}${cache_render}"
 nonnull "$cache_ttl_render" && ctxcache_render="${ctxcache_render:+$ctxcache_render${DIM} · ${RESET}}${cache_ttl_render}"
 
+# group: activity (agents/todos)
+activity_render=""
+[ "$agents_running" -gt 0 ] 2>/dev/null && activity_render="${ROSE}🤖${agents_running}${RESET}"
+[ "$todos_pending" -gt 0 ] 2>/dev/null && activity_render="${activity_render:+$activity_render }${MAUVE}✓${todos_pending}${RESET}"
+
 line1=$(
   join_segments \
     "$loc_render" \
     "$model_render" \
     "$ctxcache_render" \
+    "$activity_render" \
     "$rate_render" \
     "${SUBTEXT}🕐 ${time_str}${RESET}"
 )
@@ -349,6 +365,16 @@ if nonnull "$total_input"; then
   nonnull "$window_size" && token_window_str="${token_window_str}/$(fmt_num "$window_size")"
 fi
 
+# Token breakdown (current turn: input/cache-create/cache-read)
+token_detail=""
+if nonnull "$input_tokens" || nonnull "$cache_create" || nonnull "$cache_read"; then
+  parts=""
+  nonnull "$input_tokens" && parts="in:$(fmt_num "$input_tokens")"
+  nonnull "$cache_create" && parts="${parts:+$parts }w:$(fmt_num "$cache_create")"
+  nonnull "$cache_read" && parts="${parts:+$parts }r:$(fmt_num "$cache_read")"
+  token_detail="🔢 $parts"
+fi
+
 meta_str=""
 nonnull "$version" && meta_str="v$version"
 nonnull "$output_style" && [ "$output_style" != "default" ] && meta_str="${meta_str:+$meta_str · }🎨 $output_style"
@@ -376,6 +402,7 @@ line2=$(
     "$(seg "$SKY" "$duration_detail")" \
     "$(seg "$GREEN" "$change_detail")" \
     "$(seg "$SUBTEXT" "$token_window_str")" \
+    "$(seg "$DIM" "$token_detail")" \
     "$(seg "$YELLOW" "$pr_detail")" \
     "$(seg "$PEACH" "$worktree_detail")" \
     "$(seg "$ROSE" "$agent_detail")" \
