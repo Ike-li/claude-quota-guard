@@ -43,7 +43,7 @@ export function renderFrame(state: HudState, rows: number): string {
   // header
   const title = C.bold(C.mauve('▌ claude-quota-guard'));
   const name = s.name ?? s.id ?? '—';
-  out.push(`${title} ${C.sub('·')} ${C.sapphire(name)}${s.model ? ' ' + C.dim(s.model) : ''}`);
+  out.push(`${title} ${C.sub('·')} ${C.sapphire(name)}${s.model ? ' ' + C.dim(s.model) : ''}${s.providerDomain ? ' ' + C.dim(s.providerDomain) : ''}`);
   const loc = `${s.cwd ? '📁 ' + s.cwd.split('/').pop() : ''}${s.gitBranch ? C.yellow('  ' + s.gitBranch) : ''}`;
   if (loc.trim()) out.push(C.dim('  ' + loc));
   out.push('');

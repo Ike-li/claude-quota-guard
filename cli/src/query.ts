@@ -12,7 +12,7 @@ export function renderQueryText(state: HudState): string {
   const lines: string[] = [];
   const s = state.session;
 
-  lines.push(`session   ${s.name ?? s.id ?? '—'}${s.model ? `  (${s.model})` : ''}`);
+  lines.push(`session   ${s.name ?? s.id ?? '—'}${s.model ? `  (${s.model})` : ''}${s.providerDomain ? `  ${s.providerDomain}` : ''}`);
   if (s.gitBranch || s.cwd) {
     lines.push(`project   ${s.cwd ?? '—'}${s.gitBranch ? `  @${s.gitBranch}` : ''}`);
   }

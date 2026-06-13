@@ -3,6 +3,8 @@
 // so the JSON contract and the TUI never drift apart.
 
 import * as os from 'node:os';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { parseTranscript, findTranscript } from './transcript';
 import { readSnapshot, defaultSnapshotPath } from './snapshot';
 import { estimateCostByModel } from './format';
@@ -88,16 +90,39 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
   //    rate. Total stays null if any token-bearing model is unpriceable.
   const { total: estimatedCostUsd, perModel: costByModel } = estimateCostByModel(tx.tokensByModel);
 
+  // ── provider domain from .claude/settings.local.json ──
+  // Prefer explicit opts.cwd (user-specified project root) over tx.cwd (may be
+  // a subdirectory after cd commands). Settings live in project root, not subdirs.
+  let providerDomain: string | null = null;
+  const cwd: string | null = opts.cwd ?? tx.cwd ?? null;
+  if (cwd) {
+    const settingsLocal = path.join(cwd, '.claude', 'settings.local.json');
+    try {
+      if (fs.existsSync(settingsLocal)) {
+        const settings = JSON.parse(fs.readFileSync(settingsLocal, 'utf8'));
+        const baseUrl = settings?.env?.ANTHROPIC_BASE_URL;
+        if (baseUrl && typeof baseUrl === 'string' && !baseUrl.startsWith('https://api.anthropic.com')) {
+          // Extract domain: https://muyuan.do/path → muyuan.do
+          const match = baseUrl.match(/^https?:\/\/([^/:]+)/);
+          if (match && match[1]) providerDomain = match[1];
+        }
+      }
+    } catch {
+      // Non-fatal: provider domain is advisory
+    }
+  }
+
   return {
     schemaVersion: HUD_SCHEMA_VERSION,
     generatedAt: new Date(now).toISOString(),
     session: {
       id: sessionId ?? null,
       name: tx.sessionName,
-      cwd: tx.cwd ?? opts.cwd ?? null,
+      cwd,
       gitBranch: tx.gitBranch,
       version: tx.version,
       model: tx.model,
+      providerDomain,
       transcriptPath,
       startedAt: tx.startedAt,
       lastActivityAt: tx.lastActivityAt,

@@ -282,10 +282,24 @@ cqg_write_snapshot "${five_int:-}" "${seven_int:-}" "${five_proj:-}" "${five_res
 loc_render="${PEACH}📁 ${project_name}${RESET}"
 nonnull "$git_str" && loc_render="${loc_render}${YELLOW}${git_str}${RESET}"
 
-# group: model + mode
+# group: model + mode + provider
 model_render=""
 nonnull "$model" && model_render="${SAPPHIRE}${model}${RESET}"
 nonnull "$mode_str" && model_render="${model_render:+$model_render }${ROSE}${mode_str}${RESET}"
+
+# Extract provider domain from .claude/settings.local.json if present
+provider_domain=""
+if nonnull "$cwd"; then
+  settings_local="${cwd}/.claude/settings.local.json"
+  if [[ -f "$settings_local" ]] && command -v jq >/dev/null 2>&1; then
+    base_url="$(jq -r '.env.ANTHROPIC_BASE_URL // empty' "$settings_local" 2>/dev/null)"
+    if [[ -n "$base_url" && "$base_url" != "https://api.anthropic.com"* ]]; then
+      # Extract domain: https://muyuan.do/path → muyuan.do
+      provider_domain="$(printf '%s' "$base_url" | sed -E 's|^https?://([^/:]+).*|\1|')"
+    fi
+  fi
+fi
+nonnull "$provider_domain" && model_render="${model_render:+$model_render }${DIM}${provider_domain}${RESET}"
 
 # group: context + cache
 ctxcache_render="$ctx_render"

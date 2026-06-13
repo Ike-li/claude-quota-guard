@@ -152,5 +152,21 @@ else
   [[ -n "$ctx_int" ]]  && line="ctx ${ctx_int}%"
   [[ -n "$five_int" ]] && line="${line:+$line · }5h ${five_int}%${five_reset:+ ↻$five_reset}"
   [[ -n "$seven_int" ]] && line="${line:+$line · }7d ${seven_int}%"
+
+  # Extract provider domain from .claude/settings.local.json if present
+  if command -v jq >/dev/null 2>&1; then
+    cwd="$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // empty' 2>/dev/null)"
+    if [[ -n "$cwd" ]]; then
+      settings_local="${cwd}/.claude/settings.local.json"
+      if [[ -f "$settings_local" ]]; then
+        base_url="$(jq -r '.env.ANTHROPIC_BASE_URL // empty' "$settings_local" 2>/dev/null)"
+        if [[ -n "$base_url" && "$base_url" != "https://api.anthropic.com"* ]]; then
+          provider_domain="$(printf '%s' "$base_url" | sed -E 's|^https?://([^/:]+).*|\1|')"
+          [[ -n "$provider_domain" ]] && line="${line:+$line · }${provider_domain}"
+        fi
+      fi
+    fi
+  fi
+
   printf '%s\n' "$line"
 fi

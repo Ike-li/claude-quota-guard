@@ -108,6 +108,7 @@ export interface HudState {
     gitBranch: string | null;
     version: string | null;
     model: string | null;
+    providerDomain: string | null; // extracted from .claude/settings.local.json ANTHROPIC_BASE_URL
     transcriptPath: string | null;
     startedAt: string | null;
     lastActivityAt: string | null;
