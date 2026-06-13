@@ -1,0 +1,42 @@
+#!/bin/bash
+# Nord Theme - Cool arctic blues
+
+# Base colors
+export CQG_THEME_BASE="#2e3440"
+export CQG_THEME_MANTLE="#3b4252"
+export CQG_THEME_CRUST="#434c5e"
+
+# Text colors
+export CQG_THEME_TEXT="#eceff4"
+export CQG_THEME_SUBTEXT1="#e5e9f0"
+export CQG_THEME_SUBTEXT0="#d8dee9"
+export CQG_THEME_OVERLAY2="#4c566a"
+export CQG_THEME_OVERLAY1="#434c5e"
+export CQG_THEME_OVERLAY0="#3b4252"
+
+# Accent colors
+export CQG_THEME_BLUE="#81a1c1"
+export CQG_THEME_LAVENDER="#b48ead"
+export CQG_THEME_SAPPHIRE="#5e81ac"
+export CQG_THEME_SKY="#88c0d0"
+export CQG_THEME_TEAL="#8fbcbb"
+export CQG_THEME_GREEN="#a3be8c"
+export CQG_THEME_YELLOW="#ebcb8b"
+export CQG_THEME_PEACH="#d08770"
+export CQG_THEME_MAROON="#bf616a"
+export CQG_THEME_RED="#bf616a"
+export CQG_THEME_MAUVE="#b48ead"
+export CQG_THEME_PINK="#b48ead"
+export CQG_THEME_FLAMINGO="#d08770"
+export CQG_THEME_ROSEWATER="#d8dee9"
+
+# Semantic mappings
+export CQG_COLOR_CONTEXT="$CQG_THEME_SKY"
+export CQG_COLOR_QUOTA_OK="$CQG_THEME_GREEN"
+export CQG_COLOR_QUOTA_WARN="$CQG_THEME_YELLOW"
+export CQG_COLOR_QUOTA_CRIT="$CQG_THEME_RED"
+export CQG_COLOR_GIT="$CQG_THEME_MAUVE"
+export CQG_COLOR_AGENT="$CQG_THEME_SAPPHIRE"
+export CQG_COLOR_TODO="$CQG_THEME_PEACH"
+export CQG_COLOR_LABEL="$CQG_THEME_SUBTEXT1"
+export CQG_COLOR_DIM="$CQG_THEME_OVERLAY0"

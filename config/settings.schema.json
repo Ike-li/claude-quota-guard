@@ -1,0 +1,163 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Claude Quota Guard Configuration",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Config schema version"
+    },
+    "thresholds": {
+      "type": "object",
+      "description": "Alert thresholds (percentages)",
+      "properties": {
+        "ctxNotice": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "description": "Context notice threshold (first warning)"
+        },
+        "ctxHalt": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 85,
+          "description": "Context halt threshold (convergence trigger)"
+        },
+        "rateHalt": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 85,
+          "description": "Rate limit halt threshold (convergence trigger)"
+        }
+      }
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["auto", "subscription", "relay"],
+      "default": "auto",
+      "description": "Rate limit detection mode"
+    },
+    "lang": {
+      "type": "string",
+      "enum": ["en", "zh"],
+      "default": "en",
+      "description": "Signal language"
+    },
+    "display": {
+      "type": "object",
+      "properties": {
+        "statusline": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "string",
+              "enum": ["minimal", "compact", "full"],
+              "default": "full",
+              "description": "Display preset"
+            },
+            "theme": {
+              "type": "string",
+              "default": "catppuccin-mocha",
+              "description": "Color theme name"
+            },
+            "responsive": {
+              "type": "boolean",
+              "default": true,
+              "description": "Auto-adjust to terminal width"
+            },
+            "elements": {
+              "type": "object",
+              "properties": {
+                "context": { "type": "boolean", "default": true },
+                "quota": { "type": "boolean", "default": true },
+                "git": { "type": "boolean", "default": true },
+                "agents": { "type": "boolean", "default": true },
+                "todos": { "type": "boolean", "default": true },
+                "tokens": { "type": "boolean", "default": true }
+              }
+            }
+          }
+        },
+        "tui": {
+          "type": "object",
+          "properties": {
+            "refreshInterval": {
+              "type": "number",
+              "minimum": 100,
+              "default": 1000,
+              "description": "TUI refresh interval (ms)"
+            },
+            "showSparklines": {
+              "type": "boolean",
+              "default": true,
+              "description": "Show trend sparklines"
+            },
+            "showErrors": {
+              "type": "boolean",
+              "default": true,
+              "description": "Show error summary"
+            }
+          }
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "maxAge": {
+          "type": "number",
+          "default": 60,
+          "description": "Max snapshot age (seconds)"
+        },
+        "sweepRate": {
+          "type": "number",
+          "default": 100,
+          "description": "Sweep probability (1 in N writes)"
+        },
+        "sweepMaxAgeDays": {
+          "type": "number",
+          "default": 7,
+          "description": "Delete snapshots older than N days"
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable logging"
+        },
+        "maxSize": {
+          "type": "number",
+          "default": 102400,
+          "description": "Max log file size (bytes)"
+        },
+        "path": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Custom log path (null = default)"
+        }
+      }
+    },
+    "exportJson": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Export snapshot as JSON"
+        },
+        "path": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "JSON export path"
+        }
+      }
+    }
+  }
+}

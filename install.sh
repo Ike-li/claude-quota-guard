@@ -31,11 +31,25 @@ say "  ✓ all present"
 mkdir -p "$CLAUDE_DIR"
 
 # ── 2. config ──────────────────────────────────────────────────────────
+# Create JSON config directory
+QG_CONFIG_DIR="$CLAUDE_DIR/quota-guard"
+mkdir -p "$QG_CONFIG_DIR"
+
+# Install JSON config if missing
+JSON_CONFIG="$QG_CONFIG_DIR/settings.json"
+if [[ ! -f "$JSON_CONFIG" ]]; then
+  cp "$SELF_DIR/config/settings.default.json" "$JSON_CONFIG"
+  say "→ Installed settings.json (edit with /quota-guard config)"
+else
+  say "→ settings.json already exists, keeping it."
+fi
+
+# Keep legacy config.sh for backward compatibility
 if [[ -f "$CONFIG" ]]; then
   say "→ config.sh already exists, keeping it."
 else
   cp "$SELF_DIR/config.example.sh" "$CONFIG"
-  say "→ Installed config.sh (edit thresholds/language there)."
+  say "→ Installed config.sh (legacy, settings.json takes precedence)."
 fi
 
 # ── 3. language choice ─────────────────────────────────────────────────
@@ -45,9 +59,10 @@ if [[ -t 0 ]]; then
   read -r ans || true
   [[ "$ans" == "zh" ]] && lang="zh"
 fi
-# persist lang into config.sh
-if grep -q '^: "${CQG_LANG' "$CONFIG"; then
-  sed -i.bak "s/CQG_LANG:=[a-z]*/CQG_LANG:=$lang/" "$CONFIG" && rm -f "$CONFIG.bak"
+
+# persist lang into JSON config
+tmp=$(mktemp)
+jq --arg lang "$lang" '.lang = $lang' "$JSON_CONFIG" > "$tmp" && mv "$tmp" "$JSON_CONFIG"
 fi
 say "→ Language: $lang"
 

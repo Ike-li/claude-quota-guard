@@ -1,26 +1,61 @@
 #!/usr/bin/env bash
 # Claude Code statusLine command
-# Style: Starship + Catppuccin Mocha inspired. Human-friendly, two lines.
+# Style: Starship + Catppuccin Mocha inspired. Human-friendly, responsive layout.
 
-# Source shared snapshot logic
+# Source shared snapshot logic and config
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib/snapshot.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib/load-config.sh"
 
 input=$(cat)
 
-# Catppuccin Mocha colors.
-RED="\033[38;2;243;139;168m"
-PEACH="\033[38;2;250;179;135m"
-YELLOW="\033[38;2;249;226;175m"
-GREEN="\033[38;2;166;227;161m"
-SAPPHIRE="\033[38;2;116;199;236m"
-MAUVE="\033[38;2;203;166;247m"
-SKY="\033[38;2;137;220;235m"
-ROSE="\033[38;2;245;194;231m"
-GOLD="\033[38;2;249;226;175m"
-SUBTEXT="\033[38;2;166;173;200m"
-DIM="\033[38;2;108;112;134m"
+# Terminal width detection
+TERM_WIDTH="${COLUMNS:-$(tput cols 2>/dev/null || echo 100)}"
+
+# Apply preset if configured
+case "${CQG_STATUSLINE_PRESET:-full}" in
+  minimal)
+    CQG_SHOW_GIT="false"
+    CQG_SHOW_AGENTS="false"
+    CQG_SHOW_TODOS="false"
+    CQG_SHOW_TOKENS="false"
+    ;;
+  compact)
+    # Single line mode - will be handled below
+    ;;
+  full|*)
+    # Use element toggles from config
+    ;;
+esac
+
+# Responsive layout: auto-downgrade on narrow terminals
+if [ "${CQG_STATUSLINE_RESPONSIVE:-true}" = "true" ]; then
+  if [ "$TERM_WIDTH" -lt 80 ]; then
+    CQG_STATUSLINE_PRESET="minimal"
+    CQG_SHOW_GIT="false"
+    CQG_SHOW_AGENTS="false"
+    CQG_SHOW_TODOS="false"
+    CQG_SHOW_TOKENS="false"
+  elif [ "$TERM_WIDTH" -lt 120 ]; then
+    CQG_SHOW_TOKENS="false"
+  fi
+fi
+
+# Theme colors (loaded from theme file via load-config.sh)
+# Fallback to Catppuccin Mocha if theme didn't load
+RED="${CQG_THEME_RED:-\033[38;2;243;139;168m}"
+PEACH="${CQG_THEME_PEACH:-\033[38;2;250;179;135m}"
+YELLOW="${CQG_THEME_YELLOW:-\033[38;2;249;226;175m}"
+GREEN="${CQG_THEME_GREEN:-\033[38;2;166;227;161m}"
+SAPPHIRE="${CQG_THEME_SAPPHIRE:-\033[38;2;116;199;236m}"
+MAUVE="${CQG_THEME_MAUVE:-\033[38;2;203;166;247m}"
+SKY="${CQG_THEME_SKY:-\033[38;2;137;220;235m}"
+ROSE="${CQG_THEME_PINK:-\033[38;2;245;194;231m}"
+GOLD="${CQG_THEME_YELLOW:-\033[38;2;249;226;175m}"
+SUBTEXT="${CQG_THEME_SUBTEXT1:-\033[38;2;166;173;200m}"
+DIM="${CQG_THEME_OVERLAY0:-\033[38;2;108;112;134m}"
 RESET="\033[0m"
 
 # Color a percentage by threshold.
@@ -310,9 +345,14 @@ if [ -f "$snap_file" ]; then
 fi
 
 # ================= line 1: live status =================
-# group: location (project + branch)
-loc_render="${PEACH}📁 ${project_name}${RESET}"
-nonnull "$git_str" && loc_render="${loc_render}${YELLOW}${git_str}${RESET}"
+# Conditional rendering based on config
+loc_render=""
+if [ "${CQG_SHOW_GIT:-true}" = "true" ]; then
+  loc_render="${PEACH}📁 ${project_name}${RESET}"
+  nonnull "$git_str" && loc_render="${loc_render}${YELLOW}${git_str}${RESET}"
+else
+  loc_render="${PEACH}📁 ${project_name}${RESET}"
+fi
 
 # group: model + mode + provider
 model_render=""
@@ -342,14 +382,27 @@ fi
 nonnull "$provider_domain" && model_render="${model_render:+$model_render }${DIM}${provider_domain}${RESET}"
 
 # group: context + cache
-ctxcache_render="$ctx_render"
-nonnull "$cache_render" && ctxcache_render="${ctxcache_render:+$ctxcache_render${DIM} · ${RESET}}${cache_render}"
-nonnull "$cache_ttl_render" && ctxcache_render="${ctxcache_render:+$ctxcache_render${DIM} · ${RESET}}${cache_ttl_render}"
+ctxcache_render=""
+if [ "${CQG_SHOW_CONTEXT:-true}" = "true" ]; then
+  ctxcache_render="$ctx_render"
+  nonnull "$cache_render" && ctxcache_render="${ctxcache_render:+$ctxcache_render${DIM} · ${RESET}}${cache_render}"
+  nonnull "$cache_ttl_render" && ctxcache_render="${ctxcache_render:+$ctxcache_render${DIM} · ${RESET}}${cache_ttl_render}"
+fi
 
 # group: activity (agents/todos)
 activity_render=""
-[ "$agents_running" -gt 0 ] 2>/dev/null && activity_render="${ROSE}🤖${agents_running}${RESET}"
-[ "$todos_pending" -gt 0 ] 2>/dev/null && activity_render="${activity_render:+$activity_render }${MAUVE}✓${todos_pending}${RESET}"
+if [ "${CQG_SHOW_AGENTS:-true}" = "true" ]; then
+  [ "$agents_running" -gt 0 ] 2>/dev/null && activity_render="${ROSE}🤖${agents_running}${RESET}"
+fi
+if [ "${CQG_SHOW_TODOS:-true}" = "true" ]; then
+  [ "$todos_pending" -gt 0 ] 2>/dev/null && activity_render="${activity_render:+$activity_render }${MAUVE}✓${todos_pending}${RESET}"
+fi
+
+# group: quota
+quota_render=""
+if [ "${CQG_SHOW_QUOTA:-true}" = "true" ]; then
+  quota_render="$rate_render"
+fi
 
 line1=$(
   join_segments \
@@ -357,7 +410,7 @@ line1=$(
     "$model_render" \
     "$ctxcache_render" \
     "$activity_render" \
-    "$rate_render" \
+    "$quota_render" \
     "${SUBTEXT}🕐 ${time_str}${RESET}"
 )
 
@@ -389,12 +442,14 @@ fi
 
 # Token breakdown (current turn: input/cache-create/cache-read)
 token_detail=""
-if nonnull "$input_tokens" || nonnull "$cache_create" || nonnull "$cache_read"; then
-  parts=""
-  nonnull "$input_tokens" && parts="in:$(fmt_num "$input_tokens")"
-  nonnull "$cache_create" && parts="${parts:+$parts }w:$(fmt_num "$cache_create")"
-  nonnull "$cache_read" && parts="${parts:+$parts }r:$(fmt_num "$cache_read")"
-  token_detail="🔢 $parts"
+if [ "${CQG_SHOW_TOKENS:-true}" = "true" ]; then
+  if nonnull "$input_tokens" || nonnull "$cache_create" || nonnull "$cache_read"; then
+    parts=""
+    nonnull "$input_tokens" && parts="in:$(fmt_num "$input_tokens")"
+    nonnull "$cache_create" && parts="${parts:+$parts }w:$(fmt_num "$cache_create")"
+    nonnull "$cache_read" && parts="${parts:+$parts }r:$(fmt_num "$cache_read")"
+    token_detail="🔢 $parts"
+  fi
 fi
 
 meta_str=""
@@ -433,5 +488,8 @@ line2=$(
     "$(seg "$SUBTEXT" "$session_detail")"
 )
 
+# Output: single line for compact, dual line otherwise
 printf '%b\n' "$line1"
-nonnull "$line2" && printf '%b' "$line2"
+if [ "${CQG_STATUSLINE_PRESET:-full}" != "compact" ]; then
+  nonnull "$line2" && printf '%b' "$line2"
+fi

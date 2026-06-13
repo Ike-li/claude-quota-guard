@@ -1,0 +1,36 @@
+{
+  "name": "quota-guard",
+  "version": "1.0.0",
+  "description": "Monitor Claude Code's 5h/7d rate limits and context usage, inject convergence signals to prevent mid-task quota exhaustion",
+  "author": "raylee",
+  "repository": "https://github.com/raylee/claude-quota-guard",
+  "license": "MIT",
+  "main": "hooks/collect.sh",
+  "keywords": [
+    "claude-code",
+    "quota",
+    "rate-limit",
+    "monitoring",
+    "dashboard",
+    "statusline"
+  ],
+  "engines": {
+    "claudeCode": ">=2.1.0"
+  },
+  "hooks": {
+    "statusLine": {
+      "command": "bash {{PLUGIN_DIR}}/hooks/collect.sh"
+    },
+    "UserPromptSubmit": {
+      "command": "bash {{PLUGIN_DIR}}/hooks/guard.sh"
+    }
+  },
+  "files": [
+    "hooks/",
+    "cli/",
+    "bin/",
+    "config.example.sh",
+    "README.md",
+    "CLAUDE.md"
+  ]
+}

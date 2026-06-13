@@ -1,0 +1,45 @@
+{
+  "$schema": "./settings.schema.json",
+  "version": "1.0.0",
+  "thresholds": {
+    "ctxNotice": 50,
+    "ctxHalt": 85,
+    "rateHalt": 85
+  },
+  "mode": "auto",
+  "lang": "en",
+  "display": {
+    "statusline": {
+      "preset": "full",
+      "theme": "catppuccin-mocha",
+      "responsive": true,
+      "elements": {
+        "context": true,
+        "quota": true,
+        "git": true,
+        "agents": true,
+        "todos": true,
+        "tokens": true
+      }
+    },
+    "tui": {
+      "refreshInterval": 1000,
+      "showSparklines": true,
+      "showErrors": true
+    }
+  },
+  "snapshot": {
+    "maxAge": 60,
+    "sweepRate": 100,
+    "sweepMaxAgeDays": 7
+  },
+  "logging": {
+    "enabled": true,
+    "maxSize": 102400,
+    "path": null
+  },
+  "exportJson": {
+    "enabled": false,
+    "path": null
+  }
+}

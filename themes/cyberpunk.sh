@@ -1,0 +1,42 @@
+#!/bin/bash
+# Cyberpunk Theme - Neon blues and pinks
+
+# Base colors
+export CQG_THEME_BASE="#0a0e27"
+export CQG_THEME_MANTLE="#050711"
+export CQG_THEME_CRUST="#000000"
+
+# Text colors
+export CQG_THEME_TEXT="#00f0ff"
+export CQG_THEME_SUBTEXT1="#00d4e8"
+export CQG_THEME_SUBTEXT0="#00b8cc"
+export CQG_THEME_OVERLAY2="#009cb0"
+export CQG_THEME_OVERLAY1="#008094"
+export CQG_THEME_OVERLAY0="#006478"
+
+# Accent colors
+export CQG_THEME_BLUE="#00f0ff"
+export CQG_THEME_LAVENDER="#b4a7ff"
+export CQG_THEME_SAPPHIRE="#5db0ff"
+export CQG_THEME_SKY="#00f0ff"
+export CQG_THEME_TEAL="#00ffcc"
+export CQG_THEME_GREEN="#00ff88"
+export CQG_THEME_YELLOW="#ffff00"
+export CQG_THEME_PEACH="#ffaa00"
+export CQG_THEME_MAROON="#ff0088"
+export CQG_THEME_RED="#ff0055"
+export CQG_THEME_MAUVE="#ff00ff"
+export CQG_THEME_PINK="#ff0099"
+export CQG_THEME_FLAMINGO="#ff66cc"
+export CQG_THEME_ROSEWATER="#ffaadd"
+
+# Semantic mappings
+export CQG_COLOR_CONTEXT="$CQG_THEME_SKY"
+export CQG_COLOR_QUOTA_OK="$CQG_THEME_GREEN"
+export CQG_COLOR_QUOTA_WARN="$CQG_THEME_YELLOW"
+export CQG_COLOR_QUOTA_CRIT="$CQG_THEME_RED"
+export CQG_COLOR_GIT="$CQG_THEME_MAUVE"
+export CQG_COLOR_AGENT="$CQG_THEME_SAPPHIRE"
+export CQG_COLOR_TODO="$CQG_THEME_PINK"
+export CQG_COLOR_LABEL="$CQG_THEME_SUBTEXT1"
+export CQG_COLOR_DIM="$CQG_THEME_OVERLAY0"
