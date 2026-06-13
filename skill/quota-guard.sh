@@ -125,8 +125,15 @@ case "$cmd" in
     fi
 
     # Check statusLine
-    if jq -e '.statusLine.command | contains("collect.sh")' "$settings" >/dev/null 2>&1; then
+    statusline_cmd=$(jq -r '.statusLine.command // empty' "$settings" 2>/dev/null)
+    if echo "$statusline_cmd" | grep -q "quota-guard\|collect.sh\|statusline-command.sh"; then
       echo "✓ statusLine hook registered"
+      # Check which script is used
+      if echo "$statusline_cmd" | grep -q "statusline-command.sh"; then
+        echo "  └─ Using: statusline-command.sh (rich display)"
+      elif echo "$statusline_cmd" | grep -q "collect.sh"; then
+        echo "  └─ Using: collect.sh (minimal display)"
+      fi
     else
       echo "❌ statusLine hook not found"
       echo "   Run: /quota-guard setup"
@@ -143,6 +150,12 @@ case "$cmd" in
     # Check CLI
     if [ -x "$PROJECT_ROOT/bin/quota-guard" ]; then
       echo "✓ CLI binary found"
+      # Check if it actually works
+      if "$PROJECT_ROOT/bin/quota-guard" query --json >/dev/null 2>&1; then
+        echo "  └─ CLI functional"
+      else
+        echo "  └─ ⚠️  CLI exists but may have errors"
+      fi
     else
       echo "⚠️  CLI not built"
       echo "   Run: cd cli && npm install && npm run build"
@@ -156,15 +169,92 @@ case "$cmd" in
         echo "✓ Snapshot fresh (${age}s old)"
       else
         echo "⚠️  Snapshot stale (${age}s old)"
+        echo "   Hooks may not be running. Check statusLine config."
       fi
     else
       echo "⚠️  Snapshot not found (hooks may not have run yet)"
     fi
 
+    # Check config
+    config_file="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/quota-guard/settings.json"
+    if [ -f "$config_file" ]; then
+      echo "✓ Config file found"
+      # Validate JSON
+      if jq empty "$config_file" 2>/dev/null; then
+        echo "  └─ JSON valid"
+      else
+        echo "  └─ ⚠️  JSON syntax error"
+      fi
+    else
+      echo "⚠️  Config file not found (using defaults)"
+    fi
+
+    # Check terminal color support
+    echo ""
+    echo "🎨 Terminal Capability:"
+    echo "  TERM=$TERM"
+    echo "  COLORTERM=${COLORTERM:-not set}"
+
+    # Detect which tier will be used
+    if [[ "$COLORTERM" == "truecolor" ]] || [[ "$COLORTERM" == "24bit" ]]; then
+      echo "  └─ ✓ 24-bit truecolor supported"
+    elif [[ "$TERM" == *"256color"* ]]; then
+      echo "  └─ ✓ 256-color supported"
+    else
+      echo "  └─ ⚠️  Basic 16-color mode (may look less vibrant)"
+    fi
+
+    # Test color rendering
+    echo ""
+    echo "  Color test:"
+    printf "    "
+    printf '\033[91m●\033[0m '  # red
+    printf '\033[92m●\033[0m '  # green
+    printf '\033[94m●\033[0m '  # blue
+    printf '\033[93m●\033[0m '  # yellow
+    printf '\033[96m●\033[0m '  # cyan
+    printf '\033[95m●\033[0m'   # magenta
+    echo ""
+    echo "  └─ If you see colored circles above, colors work!"
+    echo "     If you see [91m● etc, colors are broken."
+    echo "     See: docs/TROUBLESHOOTING-COLORS.md"
+
+    # Check dependencies
+    echo ""
+    echo "📦 Dependencies:"
+    for cmd in jq node npm; do
+      if command -v "$cmd" >/dev/null 2>&1; then
+        version=$("$cmd" --version 2>&1 | head -1)
+        echo "  ✓ $cmd ($version)"
+      else
+        echo "  ❌ $cmd missing"
+      fi
+    done
+
     echo ""
     echo "📋 Summary:"
     echo "  Project root: $PROJECT_ROOT"
     echo "  Config dir: ${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+
+    # Overall health check
+    echo ""
+    statusline_ok=false
+    guard_ok=false
+
+    if echo "$statusline_cmd" | grep -q "quota-guard\|collect.sh\|statusline-command.sh"; then
+      statusline_ok=true
+    fi
+
+    if jq -e '.hooks.UserPromptSubmit[]?.hooks[]?.command | contains("guard.sh")' "$settings" >/dev/null 2>&1; then
+      guard_ok=true
+    fi
+
+    if [ "$statusline_ok" = true ] && [ "$guard_ok" = true ]; then
+      echo "✅ Installation looks healthy!"
+      echo "   If statusline doesn't show colors, see docs/TROUBLESHOOTING-COLORS.md"
+    else
+      echo "⚠️  Installation incomplete. Run: /quota-guard setup"
+    fi
     ;;
 
   clean)

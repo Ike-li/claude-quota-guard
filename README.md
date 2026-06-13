@@ -233,10 +233,14 @@ Override with preset:
 ```
 
 Checks:
-- ✓ statusLine hook registered
+- ✓ statusLine hook registered (which script: collect.sh vs statusline-command.sh)
 - ✓ UserPromptSubmit hook registered
-- ✓ CLI binary built
-- ✓ Snapshot fresh
+- ✓ CLI binary built and functional
+- ✓ Snapshot fresh (data flowing)
+- ✓ Config file valid JSON
+- 🎨 Terminal color support (truecolor/256-color/16-color)
+- 🎨 Live color rendering test
+- 📦 Dependencies (jq, node, npm)
 
 ### Common Issues
 

@@ -90,6 +90,15 @@ Run diagnostics:
 /quota-guard doctor
 ```
 
+Checks:
+- Hook registration (statusLine + UserPromptSubmit)
+- CLI functionality
+- Snapshot freshness
+- Config file validity
+- Terminal color support (detects truecolor/256-color/16-color)
+- Live color rendering test
+- Dependencies (jq, node, npm)
+
 Common issues:
 - **Snapshot stale** - Hooks not running, check settings.json
 - **No signal injected** - Thresholds too high, lower in config
