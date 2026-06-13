@@ -17,6 +17,7 @@ import type {
   TodoStatus,
   SessionTokenUsage,
   TranscriptData,
+  TrendSample,
 } from './types';
 
 const ACTIVITY_NAME_MAX_LEN = 64;
@@ -40,6 +41,7 @@ interface ContentBlock {
   input?: Record<string, unknown>;
   tool_use_id?: string;
   is_error?: boolean;
+  content?: unknown; // error message or result content
 }
 
 interface TranscriptLine {
@@ -151,6 +153,8 @@ function emptyData(): TranscriptData {
     turns: 0,
     apiCalls: { total: 0, errors: 0 },
     toolStats: [],
+    errorSummary: { totalErrors: 0, totalWarnings: 0, recent: [] },
+    trend: [],
   };
 }
 
@@ -180,6 +184,7 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
   let lastUsageKey: string | undefined;
   let turns = 0;
   let apiErrors = 0;
+  const errors: Array<{ tool: string; message: string; timestamp: string | null }> = [];
 
   try {
     const rl = readline.createInterface({
@@ -317,7 +322,22 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
           if (tool) {
             tool.status = block.is_error ? 'error' : 'completed';
             tool.endedAt = when;
-            if (block.is_error) apiErrors++; // Count tool errors as API-level failures
+            if (block.is_error) {
+              apiErrors++; // Count tool errors as API-level failures
+              // Extract error message (first 200 chars)
+              let message = 'Unknown error';
+              if (typeof block.content === 'string') {
+                message = block.content.substring(0, 200);
+              } else if (Array.isArray(block.content) && block.content.length > 0) {
+                const first = block.content[0];
+                if (typeof first === 'string') {
+                  message = first.substring(0, 200);
+                } else if (first && typeof first === 'object' && 'text' in first) {
+                  message = String(first.text).substring(0, 200);
+                }
+              }
+              errors.push({ tool: tool.name, message, timestamp: when });
+            }
           }
           const agent = agentMap.get(block.tool_use_id);
           if (agent && !agent.background) agent.endedAt = when;
@@ -368,6 +388,28 @@ export async function parseTranscript(transcriptPath: string): Promise<Transcrip
   data.turns = turns;
   data.apiCalls = { total: turns, errors: apiErrors };
   data.toolStats = toolStats;
+  data.errorSummary = {
+    totalErrors: errors.length,
+    totalWarnings: 0, // transcript doesn't have warning events yet
+    recent: errors.slice(-10), // last 10 errors
+  };
+
+  // Trend: 5-segment sampling (approximate cumulative progression).
+  // Since we don't track per-turn cumulative totals during parsing (would double
+  // memory), we approximate by dividing the final totals into 5 equal segments.
+  // This gives a rough "progress curve" without re-parsing the file.
+  const trend: TrendSample[] = [];
+  if (turns > 0 && tokens.total > 0) {
+    const segments = Math.min(5, turns); // can't have more segments than turns
+    for (let i = 1; i <= segments; i++) {
+      const fraction = i / segments;
+      trend.push({
+        tokens: Math.round(tokens.total * fraction),
+        costUsd: 0, // will be computed in aggregate.ts with pricing
+      });
+    }
+  }
+  data.trend = trend;
 
   cache.set(transcriptPath, { mtimeMs: stat.mtimeMs, size: stat.size, data });
   return data;

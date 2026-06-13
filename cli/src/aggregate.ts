@@ -91,6 +91,15 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
   const { total: estimatedCostUsd, perModel: costByModel } = estimateCostByModel(tx.tokensByModel);
   const cacheSavingsUsd = estimateCacheSavings(tx.tokensByModel);
 
+  // ── trend: compute cost for each segment (proportional to tokens) ──
+  const trend = tx.trend.map((sample) => ({
+    tokens: sample.tokens,
+    costUsd:
+      estimatedCostUsd !== null && tx.sessionTokens.total > 0
+        ? (sample.tokens / tx.sessionTokens.total) * estimatedCostUsd
+        : 0,
+  }));
+
   // ── provider domain from .claude/settings.local.json ──
   // Prefer explicit opts.cwd (user-specified project root) over tx.cwd (may be
   // a subdirectory after cd commands). Walk up the directory tree to find .claude/
@@ -148,6 +157,7 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
       agents: { running: runningAgents, total: tx.agents.length, items: tx.agents },
       recentTools: tx.tools,
       toolStats: tx.toolStats,
+      errorSummary: tx.errorSummary,
       skills: tx.skills,
       mcpServers: tx.mcpServers,
     },
@@ -158,6 +168,7 @@ export async function aggregate(opts: AggregateOptions = {}): Promise<HudState> 
       tokensByModel: costByModel,
       apiCalls: tx.apiCalls,
       cacheSavingsUsd,
+      trend,
     },
   };
 }

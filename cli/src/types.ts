@@ -40,6 +40,23 @@ export interface ToolStat {
   errors: number;
 }
 
+export interface ErrorItem {
+  tool: string;
+  message: string;
+  timestamp: string | null;
+}
+
+export interface ErrorSummary {
+  totalErrors: number;
+  totalWarnings: number; // reserved for future (transcript doesn't have warnings yet)
+  recent: ErrorItem[]; // last 5-10 errors
+}
+
+export interface TrendSample {
+  tokens: number; // cumulative tokens at this segment
+  costUsd: number; // cumulative cost at this segment
+}
+
 export interface SessionTokenUsage {
   input: number;
   output: number;
@@ -93,6 +110,10 @@ export interface TranscriptData {
   };
   // Tool usage statistics: top tools by call count.
   toolStats: ToolStat[];
+  // Error summary: total count and recent errors.
+  errorSummary: ErrorSummary;
+  // Trend samples: 5-segment sampling of token/cost progression.
+  trend: TrendSample[];
 }
 
 // Quota numbers sourced from the bash side's snapshot/export — may be absent
@@ -142,6 +163,7 @@ export interface HudState {
     agents: { running: number; total: number; items: AgentItem[] };
     recentTools: ToolItem[];
     toolStats: ToolStat[]; // Top 5 tools by call count
+    errorSummary: ErrorSummary;
     skills: string[];
     mcpServers: string[];
   };
@@ -159,5 +181,7 @@ export interface HudState {
     };
     // Cache savings: 0.9× input cost for cache_read tokens (read at 0.1× vs 1.0× fresh input).
     cacheSavingsUsd: number | null;
+    // Trend: 5-segment sampling of cumulative token/cost progression.
+    trend: TrendSample[];
   };
 }

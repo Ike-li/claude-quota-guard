@@ -143,6 +143,9 @@ project_name="${project_name##*/}"
 # ---- git ----
 git_branch=""
 git_changed=""
+git_ahead=""
+git_behind=""
+git_stash=""
 if git -C "$cwd" rev-parse --git-dir >/dev/null 2>/dev/null; then
   git_branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null || git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
 
@@ -157,19 +160,38 @@ if git -C "$cwd" rev-parse --git-dir >/dev/null 2>/dev/null; then
   if [ ! -f "$git_cache" ] || [ "$cache_age" -gt 5 ]; then
     git_status=$(git -C "$cwd" status --short 2>/dev/null)
     changed=$(printf '%s\n' "$git_status" | sed '/^$/d' | wc -l | tr -d ' ')
-    if [ "$changed" -gt 0 ] 2>/dev/null; then
-      printf '%s' "$changed" >"$git_cache"
-    else
-      : >"$git_cache"
+
+    # ahead/behind vs upstream
+    ahead=""
+    behind=""
+    upstream=$(git -C "$cwd" rev-parse --abbrev-ref @{u} 2>/dev/null)
+    if [ -n "$upstream" ]; then
+      ahead=$(git -C "$cwd" rev-list --count HEAD...$upstream 2>/dev/null || echo 0)
+      behind=$(git -C "$cwd" rev-list --count $upstream...HEAD 2>/dev/null || echo 0)
     fi
+
+    # stash count
+    stash=$(git -C "$cwd" stash list 2>/dev/null | wc -l | tr -d ' ')
+
+    # write to cache: changed|ahead|behind|stash
+    printf '%s|%s|%s|%s' "$changed" "$ahead" "$behind" "$stash" >"$git_cache"
   fi
-  git_changed=$(cat "$git_cache" 2>/dev/null)
+
+  # read from cache
+  cached=$(cat "$git_cache" 2>/dev/null)
+  git_changed=$(printf '%s' "$cached" | cut -d'|' -f1)
+  git_ahead=$(printf '%s' "$cached" | cut -d'|' -f2)
+  git_behind=$(printf '%s' "$cached" | cut -d'|' -f3)
+  git_stash=$(printf '%s' "$cached" | cut -d'|' -f4)
 fi
 
 git_str="$git_branch"
 if nonnull "$git_str"; then
   git_str=" ${git_str}"
   nonnull "$git_changed" && git_str="${git_str} ✱${git_changed}"
+  [ "$git_ahead" -gt 0 ] 2>/dev/null && git_str="${git_str} ↑${git_ahead}"
+  [ "$git_behind" -gt 0 ] 2>/dev/null && git_str="${git_str} ↓${git_behind}"
+  [ "$git_stash" -gt 0 ] 2>/dev/null && git_str="${git_str} ⚑${git_stash}"
 fi
 
 # ---- mode (effort / thinking / fast) ----

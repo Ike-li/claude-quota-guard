@@ -6,7 +6,7 @@
 
 import { aggregate, type AggregateOptions } from './aggregate';
 import type { HudState } from './types';
-import { fmtNum, fmtCost, fmtPercent, fmtAge, bar, fmtRelative } from './format';
+import { fmtNum, fmtCost, fmtPercent, fmtAge, bar, fmtRelative, renderSparkline } from './format';
 
 // Catppuccin Mocha (truecolor), matching statusline-command.sh.
 const C = {
@@ -109,6 +109,31 @@ export function renderFrame(state: HudState, rows: number): string {
         (api.errors > 0 ? C.dim(' · ') + C.red(`${api.errors} errors`) : ''),
     );
   }
+
+  // trend (sparkline)
+  const trend = state.usage.trend;
+  if (trend.length >= 2) {
+    const tokenSparkline = renderSparkline(trend.map((s) => s.tokens));
+    const costSparkline = renderSparkline(trend.map((s) => s.costUsd));
+    const first = trend[0];
+    const last = trend[trend.length - 1];
+    if (first && last) {
+      out.push(
+        C.sub('  trend   ') +
+          C.dim('tokens ') +
+          C.sky(tokenSparkline) +
+          C.dim(` (${trend.length} samples)`),
+      );
+      if (last.costUsd > 0) {
+        out.push(
+          C.sub('          ') +
+            C.dim('cost   ') +
+            C.green(costSparkline) +
+            C.dim(` (${fmtCost(first.costUsd)} → ${fmtCost(last.costUsd)})`),
+        );
+      }
+    }
+  }
   out.push('');
 
   // todos
@@ -156,6 +181,16 @@ export function renderFrame(state: HudState, rows: number): string {
       .map((t) => `${t.count}× ${t.name}${t.errors > 0 ? ` ${C.red(`(${t.errors}✗)`)}` : ''}`)
       .join(C.dim(' · '));
     out.push(C.sub('  tools   ') + formatted);
+  }
+
+  // errors
+  const errSum = state.activity.errorSummary;
+  if (errSum.totalErrors > 0) {
+    out.push(C.red(`  ✗ ${errSum.totalErrors} errors`));
+    for (const err of errSum.recent.slice(-5)) {
+      const msg = err.message.length > 60 ? err.message.substring(0, 59) + '…' : err.message;
+      out.push(C.dim(`    ${err.tool}: `) + msg);
+    }
   }
 
   // footer (pin to bottom if room)

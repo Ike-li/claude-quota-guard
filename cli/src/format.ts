@@ -52,6 +52,25 @@ export function fmtAge(seconds: number | null | undefined): string {
   return `${Math.floor(seconds / 86400)}d`;
 }
 
+// Render a sparkline (ASCII mini line chart) from an array of numbers.
+// Uses 8 vertical levels: ▁▂▃▄▅▆▇█
+const SPARK_CHARS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+export function renderSparkline(values: number[]): string {
+  if (values.length === 0) return '';
+  if (values.length === 1) return SPARK_CHARS[4] || '▅'; // mid-height for single value
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min;
+  if (range === 0) return (SPARK_CHARS[4] || '▅').repeat(values.length); // flat line at mid-height
+  return values
+    .map((v) => {
+      const normalized = (v - min) / range;
+      const idx = Math.min(SPARK_CHARS.length - 1, Math.floor(normalized * SPARK_CHARS.length));
+      return SPARK_CHARS[idx] || '▁';
+    })
+    .join('');
+}
+
 // ── token-derived cost estimate ────────────────────────────────────────
 interface Pricing {
   inPerM: number;
