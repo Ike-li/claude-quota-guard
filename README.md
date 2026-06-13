@@ -1,324 +1,180 @@
 # Claude Quota Guard
 
-**Never run out of quota mid-task again.**
+**Prevent Claude Code from running out of quota mid-task.**
 
-Monitor Claude Code's 5h/7d rate limits and context usage. Automatically injects convergence signals when nearing exhaustion to trigger safe handoff.
+Monitors your 5h/7d rate limits and context usage. When nearing exhaustion, automatically injects a signal that triggers the model to write a handoff and stop gracefully—so you can resume exactly where you left off.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-1.0.0-green.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
 
 ---
 
-## Why
+## The Problem
 
-Claude Code shows your limits in the status line, but the **model itself never sees them**. So it can cheerfully start a big refactor with 2% of your 5-hour budget left, then die halfway through — taking your context with it.
+Claude Code shows quota in the statusline, but **the model never sees it**. It can start a big refactor with 2% quota left, then die mid-task—losing your context and progress.
 
-This tool closes that gap: when quota or context nears exhaustion, it injects a `[QUOTA-LOW]` signal into Claude's context, triggering a convergence protocol that writes a handoff and stops gracefully.
+## The Solution
 
-## Features
+**Quota Guard** closes this gap with three parts:
 
-### 🛡️ Active Protection (Unique!)
-- **Signal injection** - Injects `[QUOTA-LOW]` when thresholds crossed
-- **Convergence protocol** - Model writes handoff and stops before exhaustion
-- **Handoff template** - Resume prompt for seamless continuation
+1. **Monitor**: Tracks quota/context every 10 seconds
+2. **Signal**: Injects `[QUOTA-LOW]` into context when threshold crossed
+3. **Converge**: Model sees signal, writes handoff, stops cleanly
 
-### 📊 Real-time Monitoring
-- **Statusline** - Live quota/context display in your terminal
-- **TUI dashboard** - `quota-guard watch` for detailed view
-- **Responsive layout** - Auto-adjusts to terminal width
+You get a ready-to-paste resume prompt for the next session.
 
-### 🎨 Customizable
-- **Themes** - catppuccin-mocha, cyberpunk, nord, gruvbox, dracula, tokyo-night
-- **Presets** - minimal, compact, full
-- **Element toggles** - Show/hide context, quota, git, agents, todos, tokens
-
-### 📈 Advanced Analytics (New!)
-- **Trend sparklines** - Visual token/cost progression ▁▂▃▄▅▆▇█
-- **Cache savings** - Estimate $ saved via prompt caching
-- **Tool stats** - Top 5 tools with error counts
-- **Error summary** - Aggregated failure tracking
-- **API statistics** - Call count and error rate
+---
 
 ## Quick Start
 
-### Install as Skill (Recommended)
-
 ```bash
-# 1. Clone to your .claude/skills/
+# Install
 git clone https://github.com/raylee/claude-quota-guard ~/.claude/skills/quota-guard
+cd ~/.claude/skills/quota-guard
 
-# 2. Install in Claude Code
+# Setup (one-time)
 /quota-guard setup
 
-# 3. Restart Claude Code
+# Verify it works
+/quota-guard doctor
+
+# Restart Claude Code
 ```
 
-### Manual Install
+**That's it.** Next time you hit 85% quota, you'll see:
 
-```bash
-git clone https://github.com/raylee/claude-quota-guard
-cd claude-quota-guard
-./install.sh
 ```
+[QUOTA-LOW] 5h usage at 87%. Converging to handoff...
+```
+
+The model will write a handoff file and stop. Copy the resume prompt, paste into a new session, continue.
+
+---
+
+## What You Get
+
+| Feature | Description |
+|---------|-------------|
+| 🛡️ **Active protection** | Only tool that prevents mid-task exhaustion (others just display) |
+| 📊 **Live monitoring** | Statusline + TUI dashboard (`/quota-guard watch`) |
+| 🎨 **Customizable** | 3 themes, 3 presets, responsive layout |
+| 📈 **Analytics** | Cost trends, cache savings, tool stats, error tracking |
+| 🌐 **Universal** | Works with subscription OR API relay (auto-detects) |
+
+---
 
 ## Usage
 
-### Skill Commands
+### Common Commands
 
 ```bash
-/quota-guard setup         # Install hooks and build CLI
-/quota-guard watch         # Launch live TUI dashboard
-/quota-guard query         # Show current session state
-/quota-guard config        # Edit settings.json
-/quota-guard theme <name>  # Switch color theme
-/quota-guard preset <name> # Switch display preset
-/quota-guard doctor        # Diagnose installation
-/quota-guard clean         # Clear caches
-/quota-guard uninstall     # Remove all components
+/quota-guard watch       # Launch live dashboard
+/quota-guard config      # Edit settings
+/quota-guard theme nord  # Switch theme
+/quota-guard doctor      # Diagnose issues
 ```
 
-### CLI Commands
+Full command reference: [docs/user-guide.md](docs/user-guide.md)
 
-```bash
-quota-guard query          # Text output
-quota-guard query --json   # JSON output (for scripts)
-quota-guard watch          # Live TUI (Ctrl-C or 'q' to exit)
-```
-
-## Configuration
+### Configuration
 
 Edit `~/.claude/quota-guard/settings.json`:
 
 ```json
 {
   "thresholds": {
-    "ctxNotice": 50,     // First warning at 50% context
-    "ctxHalt": 85,       // Convergence at 85% context
-    "rateHalt": 85       // Convergence at 85% quota
+    "ctxHalt": 85,    // Stop at 85% context
+    "rateHalt": 85    // Stop at 85% quota
   },
-  "mode": "auto",        // auto | subscription | relay
-  "lang": "en",          // en | zh
   "display": {
     "statusline": {
-      "preset": "full",  // minimal | compact | full
-      "theme": "catppuccin-mocha",
-      "responsive": true,
-      "elements": {
-        "context": true,
-        "quota": true,
-        "git": true,
-        "agents": true,
-        "todos": true,
-        "tokens": true
-      }
-    },
-    "tui": {
-      "refreshInterval": 1000,
-      "showSparklines": true,
-      "showErrors": true
+      "preset": "full",          // minimal | compact | full
+      "theme": "catppuccin-mocha"
     }
   }
 }
 ```
 
-### Quick Config via Commands
+Or use commands: `/quota-guard preset minimal`, `/quota-guard theme cyberpunk`
 
-```bash
-# Switch theme
-/quota-guard theme cyberpunk
+Full options: [docs/user-guide.md#configuration](docs/user-guide.md#configuration)
 
-# Switch preset
-/quota-guard preset minimal   # Quota + context only
-/quota-guard preset compact   # Single line
-/quota-guard preset full      # Dual line (default)
-
-# Edit full config
-/quota-guard config
-```
-
-## Themes
-
-- **catppuccin-mocha** - Warm pastels (default)
-- **cyberpunk** - Neon blue/pink
-- **nord** - Cool arctic blues
-- **gruvbox** - Retro earth tones *(coming soon)*
-- **dracula** - Purple/pink vampiric *(coming soon)*
-- **tokyo-night** - Deep blue nights *(coming soon)*
+---
 
 ## How It Works
 
-Three components working together:
-
-### 1. Data Collection (`collect.sh`)
-- Runs every 10s via `statusLine` hook
-- Extracts quota/context from Claude Code's JSON
-- Writes snapshot to `~/.claude/.quota-now`
-
-### 2. Signal Injection (`guard.sh`)
-- Runs on every prompt via `UserPromptSubmit` hook
-- Reads snapshot, evaluates thresholds
-- Injects `[QUOTA-LOW]` or `[CTX-NOTICE]` into context
-
-### 3. Convergence Protocol (`CLAUDE.md`)
-- Model sees signal and follows protocol:
-  1. Judge: has unsaved work OR at clean checkpoint?
-  2. If unsaved → write handoff + continuation prompt
-  3. If clean → relay status, user decides
-- Prevents mid-task quota exhaustion
-
-## Architecture
-
 ```
-Claude Code stdin JSON
-        ↓
-   collect.sh (statusLine)
-        ↓
-   .quota-now snapshot ←────────┐
-        ↓                       │
-   guard.sh (UserPromptSubmit)  │
-        ↓                       │
-   [QUOTA-LOW] signal           │
-        ↓                       │
-   Model sees signal            │
-        ↓                       │
-   Writes handoff               │
-                                │
-   CLI reads snapshot ──────────┘
-        ↓
-   quota-guard watch (TUI)
+Claude Code stdin → collect.sh → snapshot file
+                                       ↓
+User prompt → guard.sh reads snapshot → injects [QUOTA-LOW]
+                                              ↓
+Model sees signal → writes handoff → stops
 ```
 
-## CLI Dashboard Features
+Architecture details: [docs/architecture.md](docs/architecture.md)
 
-### Token/Cost Stats
-- Session totals with per-model breakdown
-- API call count and error rate
-- Cache savings estimate
-- Trend sparklines (5-segment sampling)
-
-### Activity Tracking
-- Recent tools (last 20)
-- Tool top-5 by call count
-- Running agents (live)
-- Todo progress
-- Error summary (last 10)
-
-### Git Integration
-- Branch + dirty count
-- Ahead/behind vs upstream (`↑2 ↓1`)
-- Stash count (`⚑3`)
-- Worktree detection
-
-## Responsive Layout
-
-Statusline automatically adapts to terminal width:
-
-| Width | Mode | Display |
-|-------|------|---------|
-| < 80 cols | minimal | ctx + quota only |
-| 80-120 cols | compact | essential info, single line |
-| > 120 cols | full | dual line, all features |
-
-Override with preset:
-```bash
-/quota-guard preset minimal
-```
+---
 
 ## Troubleshooting
 
-### Run Diagnostics
+**Statusline shows raw color codes (`#d08770`)**  
+→ Run `/quota-guard doctor`, check terminal color support  
+→ See [docs/troubleshooting.md#colors](docs/troubleshooting.md#colors)
 
-```bash
-/quota-guard doctor
-```
+**Signal not injecting**  
+→ Run `/quota-guard doctor`, verify hooks registered  
+→ Check thresholds in config (lower if needed)
 
-Checks:
-- ✓ statusLine hook registered (which script: collect.sh vs statusline-command.sh)
-- ✓ UserPromptSubmit hook registered
-- ✓ CLI binary built and functional
-- ✓ Snapshot fresh (data flowing)
-- ✓ Config file valid JSON
-- 🎨 Terminal color support (truecolor/256-color/16-color)
-- 🎨 Live color rendering test
-- 📦 Dependencies (jq, node, npm)
+**CLI not working**  
+→ `cd cli && npm install && npm run build`
 
-### Common Issues
+More: [docs/troubleshooting.md](docs/troubleshooting.md)
 
-**Snapshot stale**
-```bash
-# Check hooks are wired
-jq '.statusLine, .hooks.UserPromptSubmit' ~/.claude/settings.json
+---
 
-# Re-run install
-/quota-guard setup
-```
+## Documentation
 
-**No signal injected**
-```bash
-# Lower thresholds
-/quota-guard config
-# Set ctxHalt: 75, rateHalt: 75
-```
+- **[Getting Started](docs/getting-started.md)** - 5-minute tutorial
+- **[User Guide](docs/user-guide.md)** - Complete reference
+- **[Architecture](docs/architecture.md)** - How it works
+- **[Troubleshooting](docs/troubleshooting.md)** - Common issues
+- **[Contributing](docs/contributing.md)** - Development guide
 
-**CLI not working**
-```bash
-cd cli && npm install && npm run build
-```
+---
 
-**Theme not loading**
-```bash
-# List available themes
-/quota-guard theme
+## Comparison
 
-# Set theme
-/quota-guard theme nord
-```
+| Feature | Quota Guard | claude-hud | oh-my-claudecode |
+|---------|-------------|------------|------------------|
+| Prevents exhaustion | ✅ Active | ❌ Display only | ❌ Display only |
+| Statusline | ✅ | ✅ | ✅ |
+| TUI Dashboard | ✅ | ❌ | ✅ |
+| Themes | ✅ | ❌ | ✅ |
+| Language | Bash+Node | Node | Node |
 
-## Development
+**Unique value**: Only tool with active intervention—prevents quota exhaustion, not just shows it.
 
-```bash
-# Run tests
-bash test/test_guard.sh       # Hook tests
-cd cli && npm test             # CLI tests
+---
 
-# Build CLI
-cd cli && npm run build
+## Requirements
 
-# Syntax check
-bash -n hooks/collect.sh
-bash -n hooks/guard.sh
-bash -n statusline-command.sh
-```
+- Claude Code 2.1.0+
+- Bash 4.0+
+- Node.js 16+ (for CLI dashboard)
+- jq (for JSON parsing)
 
-## Comparison with Similar Tools
+Verified on macOS, Linux. Windows via WSL.
 
-| Feature | quota-guard | claude-hud | oh-my-claudecode | slima4/claude-tui |
-|---------|-------------|------------|------------------|-------------------|
-| **Signal Injection** | ✅ | ❌ | ❌ | ❌ |
-| **Convergence Protocol** | ✅ | ❌ | ❌ | ❌ |
-| **Statusline** | ✅ | ✅ | ✅ | ✅ |
-| **TUI Dashboard** | ✅ | ❌ | ✅ | ✅ |
-| **Themes** | ✅ | ❌ | ✅ | ✅ |
-| **Responsive Layout** | ✅ | ❌ | ✅ | ❌ |
-| **JSON Config** | ✅ | ✅ | ✅ | ✅ |
-| **Language** | Bash+Node | Node | Node | Python |
-
-**Unique Value**: Only tool that **actively prevents** quota exhaustion via signal injection + convergence protocol. Others are display-only.
-
-## Contributing
-
-Pull requests welcome! Please:
-1. Run tests before submitting (`bash test/test_guard.sh && cd cli && npm test`)
-2. Update docs for new features
-3. Follow existing code style (Bash: shellcheck, Node: prettier)
+---
 
 ## License
 
-MIT © raylee
+MIT © 2024
+
+---
 
 ## Acknowledgments
 
-- Inspired by [jarrodwatts/claude-hud](https://github.com/jarrodwatts/claude-hud) (transcript parsing)
-- [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) (plugin architecture)
-- [Catppuccin](https://github.com/catppuccin/catppuccin) (color scheme)
-- [slima4/claude-tui](https://github.com/slima4/claudeui) (sparkline inspiration)
+- [jarrodwatts/claude-hud](https://github.com/jarrodwatts/claude-hud) - Transcript parsing
+- [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) - Plugin architecture
+- [Catppuccin](https://github.com/catppuccin/catppuccin) - Default theme
