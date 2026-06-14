@@ -2,7 +2,7 @@
 name: quota-guard
 description: Monitor quota and context usage, inject convergence signals
 version: 1.0.0
-author: raylee
+author: Ike-li
 ---
 
 # Quota Guard Skill
