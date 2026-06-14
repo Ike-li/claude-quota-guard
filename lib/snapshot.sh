@@ -6,7 +6,10 @@
 # Anthropic's 5-hour rate-limit window in seconds (5 * 3600 = 18000).
 # If Anthropic changes the window size, update here only.
 # shellcheck disable=SC2034  # used by scripts that source this file
-readonly CQG_FIVE_HOUR_WINDOW=18000
+# Idempotent: re-sourcing this lib in one `set -e` process must not abort on a
+# "readonly variable" error (a plain `readonly X=` re-assignment returns non-zero
+# → set -e exits). Still effectively const after the first source.
+[[ -n "${CQG_FIVE_HOUR_WINDOW:-}" ]] || readonly CQG_FIVE_HOUR_WINDOW=18000
 
 # Cached platform detection for stat command (Linux uses -c, BSD/macOS uses -f)
 _CQG_STAT_PLATFORM=""

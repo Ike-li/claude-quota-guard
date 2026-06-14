@@ -167,6 +167,16 @@ echo '{"context_window":{"used_percentage":20},"session_id":"SW"}' \
   | CQG_CONFIG=/nonexistent CQG_WRAPPED_STATUSLINE="" CQG_SNAPSHOT="$SNAPB" CQG_NOTICE_STAMP="$STAMPB" CQG_SWEEP_FORCE=1 bash "$COLLECT" >/dev/null 2>&1
 [[ ! -f "$SNAPB-OLD" ]] && { echo "  ✓ collect.sh invokes sweep end-to-end"; ((pass++)); } || { echo "  ✗ collect.sh did not sweep"; ((fail++)); }
 
+echo "== lib re-source safe under set -e (idempotent readonly const) =="
+# snapshot.sh is sourced by collect/guard/statusline. Its top-level readonly
+# CQG_FIVE_HOUR_WINDOW must not abort a set -e script if the lib is ever sourced
+# twice in one process (source-chain growth). Regression: "readonly variable" exit.
+if bash -c "set -euo pipefail; . \"$LIB\"; . \"$LIB\"; echo ok" >/dev/null 2>&1; then
+  echo "  ✓ re-sourcing snapshot.sh under set -e stays alive"; ((pass++))
+else
+  echo "  ✗ re-sourcing snapshot.sh under set -e aborts (readonly regression)"; ((fail++))
+fi
+
 echo "== suspicious-zero guard: glitch frame must not clobber snapshot =="
 szs="$TMP/sz"
 # Seed a good prior per-session snapshot (native 70%).
