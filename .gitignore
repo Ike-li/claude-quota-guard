@@ -7,3 +7,5 @@ config.sh
 .quota-now
 .cqg-notice-stamp
 *.bak
+# external tooling scratch dir
+.reasonix/
