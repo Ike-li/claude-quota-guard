@@ -160,9 +160,25 @@ echo '{"context_window":{"used_percentage":50}}' | \
 
 ### 🎨 Statusline shows raw color codes
 
-**Symptom**: See `[91m●[0m` or `#d08770` instead of colors
+This has **two distinct forms** with different causes — check which you see.
 
-**Cause**: Terminal doesn't support ANSI escape sequences.
+#### Form A — literal hex (`#d08770`, `#5e81ac`, `#b48ead`)
+
+**Cause**: A theme's `#RRGGBB` colors weren't translated to ANSI escapes. Themes
+(`themes/*.sh`) define colors as hex; `statusline-command.sh` converts them. Older
+versions didn't, so the raw hex printed. **This is a code bug, not a terminal
+issue** — changing `$COLORTERM`/`$TERM` will *not* help.
+
+**Fix**: Update `statusline-command.sh` to a version that converts theme hex to
+ANSI (it now does this automatically, degrading truecolor → 256 → 16 by terminal
+capability). If `~/.claude` symlinks the repo, `git pull` suffices. Confirm:
+```bash
+grep -q hex_to_ansi statusline-command.sh && echo "✓ fixed" || echo "✗ outdated"
+```
+
+#### Form B — literal escapes (`[91m●[0m`)
+
+**Cause**: Your terminal isn't interpreting ANSI escape sequences at all.
 
 **Diagnosis**:
 ```bash
@@ -189,23 +205,10 @@ source ~/.zshrc
 export TERM=xterm-256color
 ```
 
-**Fix 3: Force basic 16-color**
-
-Edit `statusline-command.sh`, find the color detection block (around line 46), replace with:
+**Fix 3: Force 16-color** (Form B only — the status line auto-degrades by
+terminal capability, so no code edit is needed):
 ```bash
-# Force 16-color mode
-RED="\033[91m"
-PEACH="\033[33m"
-YELLOW="\033[93m"
-GREEN="\033[92m"
-SAPPHIRE="\033[94m"
-MAUVE="\033[95m"
-SKY="\033[96m"
-ROSE="\033[95m"
-GOLD="\033[93m"
-SUBTEXT="\033[37m"
-DIM="\033[90m"
-RESET="\033[0m"
+export COLORTERM= TERM=xterm
 ```
 
 **Fix 4: Use minimal statusline**

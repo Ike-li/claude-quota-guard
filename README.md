@@ -117,9 +117,10 @@ Architecture details: [docs/architecture.md](docs/architecture.md)
 
 ## Troubleshooting
 
-**Statusline shows raw color codes (`#d08770`)**  
-→ Run `/quota-guard doctor`, check terminal color support  
-→ See [docs/troubleshooting.md#colors](docs/troubleshooting.md#colors)
+**Statusline shows raw color codes**  
+→ Literal hex (`#d08770`)? Update — older `statusline-command.sh` didn't convert theme colors to ANSI  
+→ Literal escapes (`[91m`)? Run `/quota-guard doctor`, check terminal color support  
+→ See [docs/troubleshooting.md](docs/troubleshooting.md#-statusline-shows-raw-color-codes)
 
 **Signal not injecting**  
 → Run `/quota-guard doctor`, verify hooks registered  

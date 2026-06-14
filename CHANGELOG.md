@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Theme colors printed as literal hex** (`#d08770`, `#5e81ac`, …) instead of
+  rendering. Themes define colors as `#RRGGBB`, but `statusline-command.sh`
+  treated those theme variables as ANSI escapes — so any loaded theme (including
+  the default `catppuccin-mocha`) broke the status line. It now converts theme
+  hex to ANSI, honoring terminal color depth; the truecolor → 256 → 16 fallback
+  that previously covered only built-in defaults now applies to theme colors too.
+- **Status line could blank out entirely** in sessions with no
+  effort/thinking/fast indicator: `load-config.sh`'s `set -euo pipefail` leaked
+  through `source` into `statusline-command.sh`, where an empty `mode_parts`
+  array tripped `set -u`. The renderer now relaxes `errexit`/`nounset`, which it
+  was always written to assume.
+- **`lib/snapshot.sh` could abort a `set -e` caller when re-sourced** in one
+  process: its top-level `readonly CQG_FIVE_HOUR_WINDOW` returns non-zero on the
+  second source ("readonly variable"). Made idempotent so a growing source-chain
+  can't trip `set -e`. Not currently triggered — hardening found while auditing
+  the `set -e`/`source` boundary after the status-line fix.
+
+### Added
+
+- `test/test_statusline.sh` — isolated regression coverage for theme→ANSI
+  conversion and color-depth downgrade.
+
+---
+
 ## [1.0.0] - 2024-06-13
 
 ### Added

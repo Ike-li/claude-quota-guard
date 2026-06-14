@@ -9,7 +9,8 @@ Monitors Claude Code's **5h/7d rate limits** (subscription) and **context-window
 ## Commands
 
 ```bash
-bash test/test_guard.sh   # Run all bash tests (self-contained, no side effects)
+bash test/test_guard.sh        # guard.sh tiers/modes/snapshot tests (self-contained)
+bash test/test_statusline.sh   # statusline color rendering + depth downgrade (self-contained)
 ./install.sh              # Interactive install (wires hooks into ~/.claude/)
 ./uninstall.sh            # Removes hooks and cleans up
 bash -n hooks/guard.sh    # Syntax-check any script without running it
@@ -123,7 +124,7 @@ The trailing `# claude-quota-guard` comment is a **stable marker** — install/u
 
 ### Test design
 
-`test/test_guard.sh` uses a temp directory (`mktemp -d`, trap cleanup) — never touches real `~/.claude` files. Creates an isolated `config.sh`, writes synthetic snapshots, runs `guard.sh` with controlled env vars, and asserts stdout signals.
+Both `test/test_guard.sh` and `test/test_statusline.sh` use a temp directory (`mktemp -d`, trap cleanup) — never touching real `~/.claude` files. `test_guard.sh` creates an isolated `config.sh`, writes synthetic snapshots, runs `guard.sh` with controlled env vars, and asserts stdout signals. `test_statusline.sh` renders `statusline-command.sh` under an isolated `CLAUDE_CONFIG_DIR` (per-theme `settings.json`) and asserts theme `#RRGGBB` hex is converted to ANSI — never printed raw — across truecolor/256/16 depths, and that an empty `mode_parts` array doesn't blank the line.
 
 ### Logging
 

@@ -16,9 +16,11 @@ shape. `schemaVersion` is bumped on any breaking change. Source of truth:
     "gitBranch":      "main",   // null
     "version":        "2.1.x",  // Claude Code version (null)
     "model":          "claude-opus-4-8",  // null
+    "providerDomain": "cc.freemodel.dev", // 3rd-party ANTHROPIC_BASE_URL host; null on api.anthropic.com
     "transcriptPath": "/…/<id>.jsonl",    // null if not found
     "startedAt":      "ISO|null",
-    "lastActivityAt": "ISO|null"          // last assistant reply time
+    "lastActivityAt": "ISO|null",         // last assistant reply time
+    "turns":          12                  // assistant-message count, deduped (null)
   },
 
   // Subscription rate limits. SOURCE = the bash snapshot only (statusLine hook).
@@ -71,6 +73,16 @@ shape. `schemaVersion` is bumped on any breaking change. Source of truth:
       "status": "running|completed|error",
       "startedAt": "ISO|null", "endedAt": "ISO|null"
     } ],
+    "toolStats": [ {                    // top 5 tools by call count
+      "name": "Bash", "count": 42, "errors": 1
+    } ],
+    "errorSummary": {
+      "totalErrors":   3,
+      "totalWarnings": 0,               // reserved (transcript has no warnings yet)
+      "recent": [ {                     // last 5–10 errors
+        "tool": "Bash", "message": "…", "timestamp": "ISO|null"
+      } ]
+    },
     "skills":     [ "deep-research" ],
     "mcpServers": [ "computer-use" ]
   },
@@ -93,6 +105,11 @@ shape. `schemaVersion` is bumped on any breaking change. Source of truth:
         "usage": { "input": 9100, "output": 167600,
                    "cacheCreation": 0, "cacheRead": 16700000, "total": 16876700 },
         "costUsd": 47.03 }
+    ],
+    "apiCalls":        { "total": 128, "errors": 2 },  // total = turns (1 per assistant msg); errors = tool errors, NOT API/rate errors
+    "cacheSavingsUsd": 12.40,            // $ saved by cache reads (0.9× input rate); null if any token-bearing model is unpriceable
+    "trend": [                           // 5-segment sampling of cumulative token/cost progression (for sparklines)
+      { "tokens": 16876700, "costUsd": 47.03 }
     ]
   }
 }
