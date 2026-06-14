@@ -1,0 +1,16 @@
+{
+  "name": "claude-quota-guard",
+  "owner": {
+    "name": "raylee",
+    "url": "https://github.com/raylee"
+  },
+  "plugins": [
+    {
+      "name": "quota-guard",
+      "source": "./",
+      "description": "Prevent mid-task quota exhaustion: monitor 5h/7d rate limits + context usage and inject convergence signals so the model writes a handoff and stops cleanly.",
+      "category": "monitoring",
+      "tags": ["quota", "rate-limit", "context", "statusline", "handoff"]
+    }
+  ]
+}
