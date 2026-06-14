@@ -46,9 +46,6 @@ chmod +x ~/.claude/skills/quota-guard/skill/quota-guard.sh
 - **catppuccin-mocha** - Warm pastels (default)
 - **cyberpunk** - Neon blue/pink
 - **nord** - Cool blues
-- **gruvbox** - Retro earth tones
-- **dracula** - Purple/pink
-- **tokyo-night** - Deep blues
 
 ## How It Works
 
@@ -58,15 +55,10 @@ chmod +x ~/.claude/skills/quota-guard/skill/quota-guard.sh
 
 ## Configuration
 
-Edit `~/.claude/quota-guard/settings.json`:
+**Statusline appearance** — `~/.claude/quota-guard/settings.json` (or the commands below):
 
 ```json
 {
-  "thresholds": {
-    "ctxNotice": 50,
-    "ctxHalt": 85,
-    "rateHalt": 85
-  },
   "display": {
     "statusline": {
       "preset": "full",
@@ -77,10 +69,18 @@ Edit `~/.claude/quota-guard/settings.json`:
 }
 ```
 
-Or use commands:
 ```bash
 /quota-guard preset minimal
 /quota-guard theme nord
+```
+
+**Convergence thresholds** — `config.sh` in the install dir. `guard.sh` reads this,
+not `settings.json`:
+
+```sh
+CQG_CTX_NOTICE=50
+CQG_CTX_HALT=85
+CQG_RATE_HALT=85
 ```
 
 ## Troubleshooting

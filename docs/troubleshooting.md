@@ -12,7 +12,7 @@ Solutions to common issues with Claude Quota Guard.
 /quota-guard doctor
 ```
 
-This runs 11 checks and usually identifies the problem. Look for ❌ or ⚠️ symbols.
+This runs a series of checks and usually identifies the problem. Look for ❌ or ⚠️ symbols.
 
 ---
 
@@ -290,20 +290,16 @@ jq '.hooks.UserPromptSubmit' ~/.claude/settings.json
 bash ~/.claude/skills/quota-guard/hooks/guard.sh
 # Should output nothing (or a signal if threshold crossed)
 
-# 3. Check thresholds
-jq '.thresholds' ~/.claude/quota-guard/settings.json
+# 3. Check thresholds (guard.sh reads config.sh, NOT settings.json)
+grep -E 'CQG_(CTX|RATE)' ~/.claude/skills/quota-guard/config.sh
 ```
 
 **Fix 1: Lower thresholds**
+
+Edit `config.sh` in the install directory — `guard.sh` reads it, not `settings.json`:
 ```bash
-/quota-guard config
-# Edit:
-{
-  "thresholds": {
-    "ctxHalt": 75,   // Lower from 85
-    "rateHalt": 75
-  }
-}
+CQG_CTX_HALT=75      # lower from 85
+CQG_RATE_HALT=75
 ```
 
 **Fix 2: Check log**
@@ -500,8 +496,6 @@ jq '.' ~/.claude/quota-guard/settings.json >> settings-dump.json
 
 Open at: https://github.com/raylee/claude-quota-guard/issues
 
-**Expected response time**: 24-48 hours
-
 ---
 
 ## Terminal Compatibility Reference
@@ -529,5 +523,5 @@ Open at: https://github.com/raylee/claude-quota-guard/issues
 ## See Also
 
 - [Getting Started](getting-started.md) - Installation guide
-- [User Guide](user-guide.md) - Complete command reference
-- [Architecture](architecture.md) - How it works
+- [Skill Commands](../skill/SKILL.md) - Complete command reference
+- [Architecture](../CLAUDE.md) - How it works (internals)

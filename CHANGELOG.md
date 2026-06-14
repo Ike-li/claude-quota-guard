@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`install.sh` aborted with a syntax error** — a stray `fi` left from the
+  JSON-config migration broke `./install.sh` and `/quota-guard setup` for every
+  user. Removed the orphan token; `bash -n install.sh` is now clean.
 - **Theme colors printed as literal hex** (`#d08770`, `#5e81ac`, …) instead of
   rendering. Themes define colors as `#RRGGBB`, but `statusline-command.sh`
   treated those theme variables as ANSI escapes — so any loaded theme (including
@@ -33,9 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `test/test_statusline.sh` — isolated regression coverage for theme→ANSI
   conversion and color-depth downgrade.
 
+### Documentation
+
+- Removed stale duplicates (`README.md.backup`, `*.old.md`, the redundant
+  `docs/README.md` index) and fixed dead cross-links to never-written docs
+  (`user-guide.md`, `architecture.md`, `contributing.md`).
+- Corrected the configuration story: convergence thresholds live in `config.sh`
+  (read by `guard.sh`/`collect.sh`); `settings.json` drives statusline appearance.
+- Theme count corrected to the three shipped themes (was listed as six).
+
 ---
 
-## [1.0.0] - 2024-06-13
+## [1.0.0] - 2026-06-13
 
 ### Added
 
@@ -107,11 +119,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New: `docs/getting-started.md` (5-minute tutorial)
 - New: `docs/troubleshooting.md` (consolidated common issues)
 - New: `docs/ROADMAP.md` (future features: Phase C/D/E)
-- New: `docs/IMPLEMENTATION.md` (technical summary)
 
 ---
 
-## [0.1.0] - 2024-06-12 (Initial Development)
+## [0.1.0] - 2026-06-12 (Initial Development)
 
 ### Added
 

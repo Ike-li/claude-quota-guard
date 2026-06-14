@@ -176,7 +176,7 @@ prompt: |
 
 ### ✅ Phase B: Configuration Modernization (Done)
 - JSON configuration (`settings.json`)
-- Theme system (6 themes)
+- Theme system (3 themes: catppuccin-mocha, cyberpunk, nord)
 - Responsive layout
 - Preset system (minimal/compact/full)
 
@@ -200,13 +200,3 @@ Categories:
 - 🎨 **UX** - Themes, layouts, customization
 - 🔧 **Performance** - Faster parsing, lower overhead
 - 🌐 **Integration** - IDE plugins, team tools
-
-## Prioritization Criteria
-
-Features are prioritized by:
-1. **User impact** - How many users benefit?
-2. **Complexity** - Implementation cost vs. value
-3. **Maintenance** - Long-term support burden
-4. **Uniqueness** - Does another tool already do this?
-
-Phase A/B are high-priority (distribution & config). Phase C is medium (useful enhancements). Phase D/E are low (nice-to-have ecosystem).

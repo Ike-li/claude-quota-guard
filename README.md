@@ -74,30 +74,29 @@ The model will write a handoff file and stop. Copy the resume prompt, paste into
 /quota-guard doctor      # Diagnose issues
 ```
 
-Full command reference: [docs/user-guide.md](docs/user-guide.md)
+Full command reference: [skill/SKILL.md](skill/SKILL.md)
 
 ### Configuration
 
-Edit `~/.claude/quota-guard/settings.json`:
+**Convergence thresholds** (when the signal fires) live in `config.sh` in the install
+directory — `guard.sh` and `collect.sh` source it:
 
-```json
-{
-  "thresholds": {
-    "ctxHalt": 85,    // Stop at 85% context
-    "rateHalt": 85    // Stop at 85% quota
-  },
-  "display": {
-    "statusline": {
-      "preset": "full",          // minimal | compact | full
-      "theme": "catppuccin-mocha"
-    }
-  }
-}
+```sh
+CQG_CTX_HALT=85     # converge at 85% context
+CQG_RATE_HALT=85    # converge at 85% 5h quota
+CQG_CTX_NOTICE=50   # one-time notice at 50% context
 ```
 
-Or use commands: `/quota-guard preset minimal`, `/quota-guard theme cyberpunk`
+**Statusline appearance** lives in `~/.claude/quota-guard/settings.json` (read by
+`statusline-command.sh`), or set it with commands:
 
-Full options: [docs/user-guide.md#configuration](docs/user-guide.md#configuration)
+```bash
+/quota-guard preset minimal     # minimal | compact | full
+/quota-guard theme cyberpunk    # catppuccin-mocha | cyberpunk | nord
+```
+
+> Threshold keys in `settings.json` do **not** yet reach `guard.sh` — edit `config.sh`
+> (or the matching `CQG_*` environment variables) to change convergence behavior.
 
 ---
 
@@ -111,7 +110,7 @@ User prompt → guard.sh reads snapshot → injects [QUOTA-LOW]
 Model sees signal → writes handoff → stops
 ```
 
-Architecture details: [docs/architecture.md](docs/architecture.md)
+Architecture details: [CLAUDE.md](CLAUDE.md)
 
 ---
 
@@ -135,11 +134,12 @@ More: [docs/troubleshooting.md](docs/troubleshooting.md)
 
 ## Documentation
 
-- **[Getting Started](docs/getting-started.md)** - 5-minute tutorial
-- **[User Guide](docs/user-guide.md)** - Complete reference
-- **[Architecture](docs/architecture.md)** - How it works
+- **[Getting Started](docs/getting-started.md)** - 5-minute install tutorial
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues
-- **[Contributing](docs/contributing.md)** - Development guide
+- **[Skill Commands](skill/SKILL.md)** - Full `/quota-guard` reference
+- **[Architecture](CLAUDE.md)** - How it works (internals)
+- **[Development](docs/DEVELOPMENT.md)** - Contributor guide
+- **[Roadmap](docs/ROADMAP.md)** - Planned features
 
 ---
 
@@ -170,7 +170,7 @@ Verified on macOS, Linux. Windows via WSL.
 
 ## License
 
-MIT © 2024
+MIT © 2026
 
 ---
 

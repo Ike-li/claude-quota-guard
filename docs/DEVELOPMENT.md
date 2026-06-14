@@ -166,11 +166,10 @@ bash hooks/guard.sh
 ### 2. 降低阈值快速测试
 
 ```bash
-/quota-guard config
-# 编辑: "ctxHalt": 30  (从 85 改到 30)
+# 编辑 config.sh（guard.sh 读这里，不是 settings.json）
+CQG_CTX_HALT=30      # 从 85 改到 30
 
-# 现在正常使用 Claude Code
-# 上下文达到 30% 就会触发信号
+# 现在正常使用 Claude Code，上下文达到 30% 就会触发信号
 ```
 
 ### 3. 测试不同终端颜色支持
@@ -276,17 +275,10 @@ ln -s ~/code/claude-quota-guard ~/.claude/skills/quota-guard-dev
 
 # 稳定版（真实目录）
 git clone https://github.com/raylee/claude-quota-guard ~/.claude/skills/quota-guard
-
-# 在配置中切换
-# ~/.claude/settings.json:
-{
-  "statusLine": {
-    "command": "bash ~/.claude/skills/quota-guard-dev/statusline-command.sh"
-    // 或
-    "command": "bash ~/.claude/skills/quota-guard/statusline-command.sh"
-  }
-}
 ```
+
+在 `~/.claude/settings.json` 的 `statusLine.command` 中指向想用的那份
+`statusline-command.sh` 即可切换。
 
 ---
 
@@ -333,8 +325,6 @@ git clone https://github.com/raylee/claude-quota-guard ~/.claude/skills/quota-gu
 5. 更新文档（如果改了用户可见功能）
 6. 提交 PR
 
-更多详见：[CONTRIBUTING.md](CONTRIBUTING.md)（待创建）
-
 ---
 
 ## 工具链
@@ -351,5 +341,5 @@ git clone https://github.com/raylee/claude-quota-guard ~/.claude/skills/quota-gu
 ## 参考
 
 - [Getting Started](getting-started.md) - 用户安装指南
-- [Architecture](architecture.md) - 技术架构（待创建）
+- [Architecture](../CLAUDE.md) - 技术架构（内部实现）
 - [Troubleshooting](troubleshooting.md) - 常见问题

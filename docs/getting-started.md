@@ -115,16 +115,15 @@ Look at the bottom of your Claude Code terminal. You should see:
 
 ### Trigger a signal (optional)
 
-To see the convergence protocol in action:
+To see the convergence protocol in action, temporarily lower the halt threshold in
+`config.sh` (in the install directory) — `guard.sh` reads it:
 
 ```bash
-# Lower threshold temporarily
-/quota-guard config
-# Edit: "ctxHalt": 50  (instead of 85)
+# config.sh
+CQG_CTX_HALT=50      # was 85
 
-# Now use Claude Code normally
-# When context reaches 50%, you'll see:
-[QUOTA-LOW] Context at 52%. Converging...
+# Now use Claude Code normally. When context reaches 50%, you'll see:
+# [QUOTA-LOW] Context at 52%. Converging...
 ```
 
 The model will:
@@ -132,11 +131,7 @@ The model will:
 2. Write `~/.claude/projects/.../memory/handoff-<timestamp>.md`
 3. Output a ready-to-paste resume prompt
 
-**Restore threshold:**
-```bash
-/quota-guard config
-# Edit: "ctxHalt": 85  (back to default)
-```
+**Restore it:** set `CQG_CTX_HALT=85` again (or remove the override).
 
 ---
 
@@ -225,21 +220,16 @@ npm run build
 
 **Meaning**: Terminal doesn't support ANSI colors.
 
-**Fix**: See [Troubleshooting Guide](troubleshooting.md#colors)
+**Fix**: See [Troubleshooting](troubleshooting.md)
 
 ---
 
 ## Next Steps
 
-**For daily use:**
-- [User Guide](user-guide.md) - All commands and configuration options
+- [Skill Commands](../skill/SKILL.md) - All `/quota-guard` commands
 - [Troubleshooting](troubleshooting.md) - Solutions to common issues
-
-**To understand how it works:**
-- [Architecture](architecture.md) - Technical deep-dive
-
-**To contribute:**
-- [Contributing](contributing.md) - Development setup and guidelines
+- [Architecture](../CLAUDE.md) - How it works (internals)
+- [Development](DEVELOPMENT.md) - Contributor setup and guidelines
 
 ---
 
