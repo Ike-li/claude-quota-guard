@@ -18,14 +18,18 @@ set -euo pipefail
 
 # ── locate & load config + shared lib ──────────────────────────────────
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
-# shellcheck disable=SC1090
-[[ -f "$CONFIG" ]] && . "$CONFIG"
+# Single config resolver (see lib/load-config.sh): CQG_CONFIG (legacy/isolated)
+# > env > settings.json > config.sh (stable dir) > defaults. Brings in the
+# display-element toggles (CQG_SHOW_*) and the exportJson choice from JSON.
+# shellcheck disable=SC1091
+. "$SELF_DIR/../lib/load-config.sh"
 # defaults if config missing
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_NOTICE_STAMP:=$HOME/.claude/.cqg-notice-stamp}"  # guard's stamp base; collect only sweeps its per-session siblings
 : "${CQG_WRAPPED_STATUSLINE:=}"
 : "${CQG_EXPORT_JSON:=}"   # opt-in JSON export for other tools (empty = off)
+: "${CQG_SHOW_CONTEXT:=true}"   # standalone-line element toggles
+: "${CQG_SHOW_QUOTA:=true}"     # (full element set honored by statusline-command.sh)
 
 # Source shared snapshot logic
 # shellcheck disable=SC1091
@@ -149,9 +153,11 @@ if [[ -n "$CQG_WRAPPED_STATUSLINE" ]]; then
 else
   # standalone mode: minimal one-liner
   line=""
-  [[ -n "$ctx_int" ]]  && line="ctx ${ctx_int}%"
-  [[ -n "$five_int" ]] && line="${line:+$line · }5h ${five_int}%${five_reset:+ ↻$five_reset}"
-  [[ -n "$seven_int" ]] && line="${line:+$line · }7d ${seven_int}%"
+  [[ "$CQG_SHOW_CONTEXT" == "true" && -n "$ctx_int" ]] && line="ctx ${ctx_int}%"
+  if [[ "$CQG_SHOW_QUOTA" == "true" ]]; then
+    [[ -n "$five_int" ]] && line="${line:+$line · }5h ${five_int}%${five_reset:+ ↻$five_reset}"
+    [[ -n "$seven_int" ]] && line="${line:+$line · }7d ${seven_int}%"
+  fi
 
   # Extract provider domain from .claude/settings.local.json if present
   if command -v jq >/dev/null 2>&1; then

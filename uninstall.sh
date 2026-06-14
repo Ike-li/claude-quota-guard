@@ -9,7 +9,10 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 SETTINGS="$CLAUDE_DIR/settings.json"
 CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
-CONFIG="$SELF_DIR/config.sh"
+# Read config from the stable dir first (where install.sh now writes it), then
+# fall back to the legacy repo-root location.
+CONFIG="$CLAUDE_DIR/quota-guard/config.sh"
+[[ -f "$CONFIG" ]] || CONFIG="$SELF_DIR/config.sh"
 
 say() { printf '%s\n' "$*"; }
 
@@ -53,6 +56,13 @@ fi
 rm -f "$HOME/.claude/.quota-now" "$HOME/.claude/.quota-now-"* \
       "$HOME/.claude/.cqg-notice-stamp" "$HOME/.claude/.cqg-notice-stamp-"* \
       "$HOME/.claude/quota-guard.log" "$HOME/.claude/quota-guard.log.1" 2>/dev/null || true
+
+# Remove the statusLine owner flag so the plugin's SessionStart bridge goes
+# inert — otherwise it would keep re-pinning collect.sh into settings.json (a
+# "zombie" status line that /plugin uninstall cannot clear). Also drop the wrap
+# helper. Run this BEFORE /plugin uninstall.
+rm -f "$CLAUDE_DIR/quota-guard/.statusline-owner" \
+      "$CLAUDE_DIR/quota-guard/.cqg-wrap.json" 2>/dev/null || true
 
 say ""
 say "✅ Uninstalled. Restart Claude Code to apply."

@@ -8,6 +8,9 @@
   },
   "mode": "auto",
   "lang": "en",
+  "features": {
+    "ctxNotice": true
+  },
   "display": {
     "statusline": {
       "preset": "full",

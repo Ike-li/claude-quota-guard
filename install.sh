@@ -9,8 +9,7 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 SETTINGS="$CLAUDE_DIR/settings.json"
-CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
-CONFIG="$SELF_DIR/config.sh"
+CONFIG="$CLAUDE_DIR/quota-guard/config.sh"   # stable dir — never the ephemeral plugin dir
 
 say() { printf '%s\n' "$*"; }
 err() { printf 'ERROR: %s\n' "$*" >&2; }
@@ -39,8 +38,10 @@ mkdir -p "$QG_CONFIG_DIR"
 JSON_CONFIG="$QG_CONFIG_DIR/settings.json"
 if [[ ! -f "$JSON_CONFIG" ]]; then
   cp "$SELF_DIR/config/settings.default.json" "$JSON_CONFIG"
-  say "→ Installed settings.json (edit with /quota-guard config)"
+  JSON_FRESH=true
+  say "→ Installed settings.json"
 else
+  JSON_FRESH=false
   say "→ settings.json already exists, keeping it."
 fi
 
@@ -64,6 +65,28 @@ fi
 tmp=$(mktemp)
 jq --arg lang "$lang" '.lang = $lang' "$JSON_CONFIG" > "$tmp" && mv "$tmp" "$JSON_CONFIG"
 say "→ Language: $lang"
+
+# ── 3b. capability mode (fresh config only; never clobber an existing one) ─
+if [[ "$JSON_FRESH" == true ]]; then
+  mode_choice="full"
+  if [[ -t 0 ]]; then
+    say ""
+    say "Which capabilities to enable?"
+    say "  full       (default) all data + notices on"
+    say "  essential  context + quota only, compact statusline"
+    say "  quiet      convergence only; no notices, minimal statusline"
+    printf 'Mode? [full/essential/quiet] (Enter = full): '
+    read -r ans || true
+    case "$ans" in essential|quiet) mode_choice="$ans" ;; *) mode_choice="full" ;; esac
+  else
+    say "→ Non-interactive: defaulting to mode 'full'."
+  fi
+  # Reuse the dispatcher's named-bundle definitions (single source of truth).
+  CLAUDE_CONFIG_DIR="$CLAUDE_DIR" bash "$SELF_DIR/skills/quota-guard/quota-guard.sh" mode "$mode_choice" >/dev/null 2>&1 || true
+  say "→ Capability mode: $mode_choice  (change anytime: /quota-guard:quota-guard config)"
+else
+  say "→ Keeping your existing config. Reconfigure: /quota-guard:quota-guard config"
+fi
 
 # ── 4. settings.json: detect existing statusLine → wrap or standalone ───
 [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
@@ -91,7 +114,7 @@ else
 fi
 
 # persist wrapped command into config.sh safely (via jq to avoid shell metachar issues)
-wrap_json="$SELF_DIR/.cqg-wrap.json"
+wrap_json="$QG_CONFIG_DIR/.cqg-wrap.json"
 jq -n --arg cmd "$wrap_cmd" '{wrapped: $cmd}' > "$wrap_json"
 # update config.sh to source the JSON-escaped value
 if ! grep -q "CQG_WRAPPED_STATUSLINE=" "$CONFIG" 2>/dev/null; then
@@ -123,16 +146,17 @@ jq --arg collect "$collect" --arg guard "$guard" '
 ' "$SETTINGS" > "$tmp" && mv -f "$tmp" "$SETTINGS"
 say "→ Updated settings.json (statusLine + UserPromptSubmit hook)."
 
-# ── 6. append convergence protocol to CLAUDE.md ────────────────────────
-tpl="$SELF_DIR/templates/convergence.$lang.md"
-touch "$CLAUDE_MD"
-if grep -q "BEGIN claude-quota-guard" "$CLAUDE_MD"; then
-  say "→ CLAUDE.md already has the protocol block, skipping."
-else
-  printf '\n' >> "$CLAUDE_MD"
-  cat "$tpl" >> "$CLAUDE_MD"
-  say "→ Appended convergence protocol to CLAUDE.md."
-fi
+# ── 6. mark statusLine ownership ───────────────────────────────────────
+# Lets the plugin's SessionStart bridge (hooks/bridge-statusline.sh) re-pin /
+# self-heal collect.sh after settings-rewrite strips or plugin-path changes.
+# Without this flag the bridge stays inert, so /plugin install alone never
+# touches the statusLine.
+: > "$QG_CONFIG_DIR/.statusline-owner"
+say "→ Marked statusLine owner (enables plugin SessionStart self-heal)."
+
+# Note: the convergence protocol is intentionally NOT written to your CLAUDE.md.
+# guard.sh emits it inline (templates/convergence.*.md) only when [QUOTA-LOW]
+# actually fires — nothing is injected into your context until then.
 
 # ── 7. build cli + symlink to PATH ─────────────────────────────────────
 say "→ Building the dashboard CLI (cli/)..."

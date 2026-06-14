@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Claude Quota Guard - Skill Entry Point
-# Usage: /quota-guard <command>
+# Usage: /quota-guard:quota-guard <command>   (or: bash quota-guard.sh <command>)
 
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SKILL_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SKILL_DIR/../.." && pwd)"   # repo/plugin root (two levels up from skills/quota-guard/)
 
 cmd="${1:-help}"
 shift || true
@@ -111,6 +111,88 @@ case "$cmd" in
 
     echo "✓ Preset set to: $preset_name"
     echo "  Restart Claude Code to see changes"
+    ;;
+
+  mode)
+    # Apply a named capability bundle. The model-driven config flow (SKILL.md)
+    # calls this after asking the user which mode they want.
+    mode_name="${1:-}"
+    config_file="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/quota-guard/settings.json"
+    if [ -z "$mode_name" ]; then
+      echo "Usage: /quota-guard:quota-guard mode <full|essential|quiet>"
+      echo "  full       all data + notices on (default)"
+      echo "  essential  context + quota only, compact statusline"
+      echo "  quiet      convergence only; no [CTX-NOTICE], minimal statusline"
+      exit 0
+    fi
+    case "$mode_name" in
+      full)      filter='.features.ctxNotice=true | .display.statusline.preset="full"    | .display.statusline.elements={context:true,quota:true,git:true,agents:true,todos:true,tokens:true} | .logging.enabled=true' ;;
+      essential) filter='.features.ctxNotice=true | .display.statusline.preset="compact" | .display.statusline.elements={context:true,quota:true,git:false,agents:false,todos:false,tokens:false}' ;;
+      quiet)     filter='.features.ctxNotice=false | .display.statusline.preset="minimal" | .display.statusline.elements={context:true,quota:false,git:false,agents:false,todos:false,tokens:false}' ;;
+      *) echo "❌ Unknown mode: $mode_name (expected full|essential|quiet)"; exit 1 ;;
+    esac
+    if [ ! -f "$config_file" ]; then
+      mkdir -p "$(dirname "$config_file")"
+      cp "$PROJECT_ROOT/config/settings.default.json" "$config_file"
+    fi
+    tmp=$(mktemp)
+    jq "$filter" "$config_file" > "$tmp" && mv "$tmp" "$config_file"
+    echo "✓ Mode set to: $mode_name"
+    echo "  Restart Claude Code to apply"
+    ;;
+
+  set)
+    # Set a single config key. dotpath is sanitized (it's interpolated into the
+    # jq program); the value is type-coerced (true/false→bool, ints→number, else
+    # string via --arg, which is injection-safe).
+    dotpath="${1:-}"; value="${2:-}"
+    config_file="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/quota-guard/settings.json"
+    if [ -z "$dotpath" ] || [ "$#" -lt 2 ]; then
+      echo "Usage: /quota-guard:quota-guard set <dotpath> <value>"
+      echo "  e.g. set display.statusline.elements.git false"
+      echo "       set thresholds.ctxHalt 80"
+      echo "       set features.ctxNotice false"
+      exit 0
+    fi
+    if ! printf '%s' "$dotpath" | grep -Eq '^[A-Za-z0-9_.]+$'; then
+      echo "❌ Invalid key path: $dotpath (allowed: letters, digits, _ and .)"; exit 1
+    fi
+    if [ ! -f "$config_file" ]; then
+      mkdir -p "$(dirname "$config_file")"
+      cp "$PROJECT_ROOT/config/settings.default.json" "$config_file"
+    fi
+    tmp=$(mktemp)
+    if [ "$value" = "true" ] || [ "$value" = "false" ] || printf '%s' "$value" | grep -Eq '^-?[0-9]+$'; then
+      jq ".${dotpath} = ${value}" "$config_file" > "$tmp"
+    else
+      jq --arg v "$value" ".${dotpath} = \$v" "$config_file" > "$tmp"
+    fi
+    if [ -s "$tmp" ]; then
+      mv "$tmp" "$config_file"
+      echo "✓ set ${dotpath} = ${value}"
+      echo "  Restart Claude Code to apply"
+    else
+      rm -f "$tmp"; echo "❌ Failed to set ${dotpath}"; exit 1
+    fi
+    ;;
+
+  show)
+    # Print the current effective config (human + model readable). The config
+    # flow calls this first to show the user their current state.
+    config_file="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/quota-guard/settings.json"
+    if [ ! -f "$config_file" ]; then
+      echo "No settings.json yet — using built-in defaults. Run setup or 'mode full'."
+      exit 0
+    fi
+    echo "Current configuration ($config_file):"
+    jq -r '
+      "  mode:           \(.mode // "auto")   lang: \(.lang // "en")",
+      "  thresholds:     ctxNotice=\(.thresholds.ctxNotice)  ctxHalt=\(.thresholds.ctxHalt)  rateHalt=\(.thresholds.rateHalt)",
+      "  features:       ctxNotice=\(if .features.ctxNotice == null then "true" else (.features.ctxNotice|tostring) end)   (guard convergence: always on)",
+      "  statusline:     preset=\(.display.statusline.preset)  theme=\(.display.statusline.theme)",
+      "  show elements:  " + ([.display.statusline.elements | to_entries[] | select(.value==true) | .key] | join(", ") | if . == "" then "(none)" else . end),
+      "  exportJson:     \(.exportJson.enabled)   logging: \(.logging.enabled)"
+    ' "$config_file"
     ;;
 
   doctor)
@@ -277,25 +359,28 @@ case "$cmd" in
     cat <<EOF
 Claude Quota Guard - Prevent mid-task quota exhaustion
 
-Usage: /quota-guard <command> [options]
+Usage: /quota-guard:quota-guard <command> [options]
 
 Commands:
-  setup         Install hooks and build CLI
-  watch         Launch live TUI dashboard
-  query         One-shot session state (text or --json)
-  config        Edit settings.json
-  theme <name>  Switch color theme
-  preset <name> Switch display preset (minimal|compact|full)
-  doctor        Diagnose installation issues
-  clean         Clear all caches
-  uninstall     Remove all components
-  help          Show this help
+  setup            Wire statusLine, build CLI, mark statusLine owner
+  config           Guided config (Claude walks you through it in chat)
+  mode <name>      Apply a bundle: full | essential | quiet
+  set <path> <val> Set one key, e.g. set features.ctxNotice false
+  show             Print the current effective configuration
+  watch            Launch live TUI dashboard
+  query            One-shot session state (text or --json)
+  theme <name>     Switch color theme
+  preset <name>    Switch display preset (minimal|compact|full)
+  doctor           Diagnose installation issues
+  clean            Clear all caches
+  uninstall        Remove all components (run BEFORE /plugin uninstall)
+  help             Show this help
 
 Examples:
-  /quota-guard setup
-  /quota-guard watch
-  /quota-guard theme cyberpunk
-  /quota-guard preset minimal
+  /quota-guard:quota-guard config
+  /quota-guard:quota-guard mode essential
+  /quota-guard:quota-guard set display.statusline.elements.git false
+  /quota-guard:quota-guard show
 
 Documentation: https://github.com/raylee/claude-quota-guard
 EOF

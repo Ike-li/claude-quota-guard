@@ -36,7 +36,7 @@ function statusMark(status: string): string {
   return C.dim('·');
 }
 
-export function renderFrame(state: HudState, rows: number): string {
+export function renderFrame(state: HudState, rows: number, showSparklines = true): string {
   const out: string[] = [];
   const s = state.session;
 
@@ -112,7 +112,7 @@ export function renderFrame(state: HudState, rows: number): string {
 
   // trend (sparkline)
   const trend = state.usage.trend;
-  if (trend.length >= 2) {
+  if (showSparklines && trend.length >= 2) {
     const tokenSparkline = renderSparkline(trend.map((s) => s.tokens));
     const costSparkline = renderSparkline(trend.map((s) => s.costUsd));
     const first = trend[0];
@@ -204,7 +204,7 @@ export function renderFrame(state: HudState, rows: number): string {
   return out.slice(0, rows).join('\n');
 }
 
-export async function runWatch(opts: AggregateOptions & { intervalMs?: number }): Promise<void> {
+export async function runWatch(opts: AggregateOptions & { intervalMs?: number; showSparklines?: boolean }): Promise<void> {
   const interval = Math.max(250, opts.intervalMs ?? 1000);
   const stdout = process.stdout;
   const stdin = process.stdin;
@@ -230,7 +230,7 @@ export async function runWatch(opts: AggregateOptions & { intervalMs?: number })
       return;
     }
     const rows = stdout.rows && stdout.rows > 4 ? stdout.rows : 24;
-    const frame = renderFrame(state, rows);
+    const frame = renderFrame(state, rows, opts.showSparklines !== false);
     // Home cursor, repaint each line clearing to EOL, then clear below — low flicker.
     stdout.write('\x1b[H' + frame.split('\n').map((l) => l + '\x1b[K').join('\n') + '\x1b[J');
   };

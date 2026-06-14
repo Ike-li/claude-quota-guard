@@ -9,6 +9,9 @@ GUARD="$SELF_DIR/../hooks/guard.sh"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+# Isolate from the real ~/.claude so load-config.sh never reads the user's live
+# settings.json during tests (collect.sh cases run without CQG_CONFIG).
+export CLAUDE_CONFIG_DIR="$TMP/cfgdir"; mkdir -p "$CLAUDE_CONFIG_DIR/quota-guard"
 SNAP="$TMP/snap"; STAMP="$TMP/stamp"; CFG="$TMP/config.sh"
 
 cat > "$CFG" <<EOF
@@ -252,6 +255,62 @@ expect "ctx90 + 3 todos pending → full convergence" "Convergence protocol trig
 rm -f "$STAMP"; snap 40 9 45 2h 5d 90 2 1
 out="$(run)"
 expect "ctx90 + agents + todos → full convergence" "Convergence protocol triggered" "$out"
+
+echo "== inline convergence protocol (decoupled from CLAUDE.md) =="
+# guard.sh now emits the protocol body inline on CONVERGE (templates/convergence.*.md)
+# instead of pointing at CLAUDE.md, so the plugin is self-contained.
+rm -f "$STAMP"; snap 40 9 45 2h 5d 90 1 0
+out="$(run)"
+expect "convergence inlines protocol body" "Stop expanding work" "$out"
+expect "convergence inlines handoff template" "Resume prompt" "$out"
+if [[ "$out" == *"follow CLAUDE.md"* || "$out" == *"§"* ]]; then
+  echo "  ✗ stale CLAUDE.md reference in convergence output"; ((fail++))
+else
+  echo "  ✓ no stale 'follow CLAUDE.md' reference"; ((pass++))
+fi
+# zh template inlined too
+out="$(CQG_CONFIG="$CFG_ZH" bash "$GUARD" </dev/null)"
+expect "zh: protocol body inlined (停止展开新工作)" "停止展开新工作" "$out"
+
+if command -v jq >/dev/null 2>&1; then
+  echo "== JSON config drives guard (config-split resolved) =="
+  # No CQG_CONFIG → guard resolves via load-config.sh from settings.json in the
+  # isolated CLAUDE_CONFIG_DIR. Snapshot/stamp passed by env (load-config leaves them).
+  JDIR="$CLAUDE_CONFIG_DIR/quota-guard"; JSON="$JDIR/settings.json"
+  jrun() { CQG_SNAPSHOT="$SNAP" CQG_NOTICE_STAMP="$STAMP" bash "$GUARD" </dev/null; }
+
+  printf '{"thresholds":{"ctxHalt":65,"ctxNotice":50,"rateHalt":85},"mode":"relay","features":{"ctxNotice":true}}\n' > "$JSON"
+  rm -f "$STAMP"; snap 0 0 0 - - 70 0 0
+  expect "JSON ctxHalt=65 → ctx70 QUOTA-LOW (guard reads JSON)" "QUOTA-LOW" "$(jrun)"
+  rm -f "$STAMP"   # clear the stamp the HALT branch just wrote, or NOTICE dedups
+  expect "env CQG_CTX_HALT=95 overrides JSON 65 → CTX-NOTICE not halt" "CTX-NOTICE" "$(CQG_CTX_HALT=95 jrun)"
+
+  printf '{"thresholds":{"ctxHalt":85,"ctxNotice":50,"rateHalt":85},"mode":"relay","features":{"ctxNotice":false}}\n' > "$JSON"
+  rm -f "$STAMP"; snap 0 0 0 - - 60 0 0
+  expect "JSON features.ctxNotice=false → ctx60 silent (no NOTICE)" EMPTY "$(jrun)"
+  rm -f "$STAMP"; snap 40 9 45 2h 5d 90 1 0
+  expect "ctxNotice off but ctx90+work → CONVERGE still fires" "Convergence protocol triggered" "$(jrun)"
+  rm -f "$JSON"
+
+  echo "== config dispatcher: mode / set / show =="
+  DISP="$SELF_DIR/../skills/quota-guard/quota-guard.sh"; DJSON="$JDIR/settings.json"
+  bash "$DISP" mode quiet >/dev/null 2>&1
+  if [[ "$(jq -r '.features.ctxNotice' "$DJSON")" == "false" && "$(jq -r '.display.statusline.preset' "$DJSON")" == "minimal" ]]; then
+    echo "  ✓ mode quiet applied (notice off, preset minimal)"; ((pass++)); else echo "  ✗ mode quiet"; ((fail++)); fi
+  bash "$DISP" set thresholds.ctxHalt 80 >/dev/null 2>&1
+  [[ "$(jq -r '.thresholds.ctxHalt' "$DJSON")" == "80" ]] && { echo "  ✓ set number coerces to JSON number"; ((pass++)); } || { echo "  ✗ set number"; ((fail++)); }
+  bash "$DISP" set features.ctxNotice false >/dev/null 2>&1
+  [[ "$(jq -r '.features.ctxNotice' "$DJSON")" == "false" ]] && { echo "  ✓ set bool false stored (no // gotcha)"; ((pass++)); } || { echo "  ✗ set bool"; ((fail++)); }
+  if bash "$DISP" set 'a|.evil' x >/dev/null 2>&1; then echo "  ✗ injection path not blocked"; ((fail++)); else echo "  ✓ injection path rejected"; ((pass++)); fi
+  jq empty "$DJSON" 2>/dev/null && { echo "  ✓ config stays valid JSON"; ((pass++)); } || { echo "  ✗ invalid JSON"; ((fail++)); }
+  rm -f "$DJSON"
+fi
+
+echo "== collect.sh standalone honors element toggles =="
+cel="$TMP/cel"
+out="$(echo '{"context_window":{"used_percentage":40},"rate_limits":{"five_hour":{"used_percentage":20,"resets_at":1739000000}}}' \
+  | CQG_CONFIG=/nonexistent CQG_SHOW_CONTEXT=false CQG_SHOW_QUOTA=true CQG_SNAPSHOT="$cel" CQG_WRAPPED_STATUSLINE="" bash "$COLLECT")"
+if [[ "$out" != *"ctx"* && "$out" == *"5h"* ]]; then echo "  ✓ SHOW_CONTEXT=false hides ctx, keeps 5h"; ((pass++)); else echo "  ✗ got: '$out'"; ((fail++)); fi
 
 echo ""
 echo "Result: $pass passed, $fail failed"

@@ -16,19 +16,23 @@ set -euo pipefail
 
 # ── locate & load config + shared lib ─────────────────────────────────
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG="${CQG_CONFIG:-$SELF_DIR/../config.sh}"
-# shellcheck disable=SC1090
-[[ -f "$CONFIG" ]] && . "$CONFIG"
+# Single config resolver (see lib/load-config.sh): CQG_CONFIG (legacy/isolated)
+# > env > settings.json > config.sh (stable dir) > defaults. This is what makes
+# the JSON config flow actually drive guard behavior (thresholds, mode, features).
+# shellcheck disable=SC1091
+. "$SELF_DIR/../lib/load-config.sh"
 # Load shared library for stat helpers
 # shellcheck disable=SC1091
 . "$SELF_DIR/../lib/snapshot.sh"
 : "${CQG_CTX_NOTICE:=50}"; : "${CQG_CTX_HALT:=85}"
 : "${CQG_RATE_HALT:=85}"
+: "${CQG_FEATURE_CTX_NOTICE:=true}"
 : "${CQG_LANG:=en}";       : "${CQG_MAX_AGE:=60}"
 : "${CQG_MODE:=auto}"     # auto | subscription | relay
 : "${CQG_SNAPSHOT:=$HOME/.claude/.quota-now}"
 : "${CQG_NOTICE_STAMP:=$HOME/.claude/.cqg-notice-stamp}"
-: "${CQG_LOG:=$HOME/.claude/quota-guard.log}"
+# `=` (not `:=`): preserve an explicitly-empty CQG_LOG (logging disabled via config)
+: "${CQG_LOG=$HOME/.claude/quota-guard.log}"
 : "${CQG_LOG_MAX:=102400}"   # 100 KB before rotation
 
 # Round thresholds to integers — ((...)) arithmetic doesn't handle decimals
@@ -44,6 +48,18 @@ _log() {
   local sz
   sz="$(cqg_stat_size "$CQG_LOG")"
   if (( sz > CQG_LOG_MAX )); then mv "$CQG_LOG" "${CQG_LOG}.1" 2>/dev/null || true; fi
+}
+
+# ── emit convergence protocol inline ───────────────────────────────────
+# Single source of truth: the same template install.sh used to append to the
+# user's CLAUDE.md. We inject it here instead — only on the rare CONVERGE
+# branch — so the plugin is self-contained and writes nothing to CLAUDE.md.
+_emit_protocol() {
+  local tpl="$SELF_DIR/../templates/convergence.${CQG_LANG}.md"
+  [[ -f "$tpl" ]] || tpl="$SELF_DIR/../templates/convergence.en.md"
+  [[ -f "$tpl" ]] || return 0
+  # drop the <!-- BEGIN/END claude-quota-guard --> marker lines (CLAUDE.md anchors)
+  awk '!/<!-- (BEGIN|END) claude-quota-guard -->/' "$tpl"
 }
 
 # ── parse session_id from hook JSON; prefer per-session snapshot/stamp ─
@@ -135,7 +151,7 @@ if [[ "$CQG_LANG" == "zh" ]]; then
   L_CTX="- 上下文使用率: ${ctx}%（即将触发 auto-compact / 丢上下文）"
   L_5H="- 5h 使用率: ${usage_5h}%"; L_PROJ="- 5h 预计到期时: ${proj_5h}%"
   L_RESET="- 5h 重置倒计时: ${five_reset:-?}"; L_7D="- 7d 使用率: ${usage_7d:-?}%"
-  L_FOOT="**收敛协议已触发** — 请参照 CLAUDE.md § 额度/上下文收敛协议 执行。"
+  L_FOOT="**收敛协议已触发** — 按下列步骤执行："
   L_NOTICE="ℹ️  [CTX-NOTICE] 上下文已用 ${ctx}% —— 仅提示，无需收敛。"
   L_NOTICE2="继续正常工作；到 ${CQG_CTX_HALT}% 时会触发收敛协议。"
 else
@@ -143,7 +159,7 @@ else
   L_CTX="- Context usage: ${ctx}% (auto-compact / context loss imminent)"
   L_5H="- 5h usage: ${usage_5h}%"; L_PROJ="- 5h projected at reset: ${proj_5h}%"
   L_RESET="- 5h resets in: ${five_reset:-?}"; L_7D="- 7d usage: ${usage_7d:-?}%"
-  L_FOOT="**Convergence protocol triggered** — follow CLAUDE.md § Quota / Context Convergence Protocol."
+  L_FOOT="**Convergence protocol triggered** — follow the steps below:"
   L_NOTICE="ℹ️  [CTX-NOTICE] Context at ${ctx}% — advisory only, no convergence."
   L_NOTICE2="Keep working normally; convergence triggers at ${CQG_CTX_HALT}%."
 fi
@@ -164,7 +180,9 @@ if [[ "$quota_trigger" == "true" || "$ctx_trigger" == "true" ]]; then
     if [[ "$quota_trigger" == "true" ]]; then
       echo "$L_5H"; echo "$L_PROJ"; echo "$L_RESET"; echo "$L_7D"
     fi
-    echo ""; echo "$L_FOOT"; echo "---"
+    echo ""; echo "$L_FOOT"; echo ""
+    _emit_protocol
+    echo "---"
   else
     # Clean checkpoint → relay status, user decides
     _log "$_lp → QUOTA-LOW(${_reason}) work=no → RELAY"
@@ -183,8 +201,12 @@ if [[ "$quota_trigger" == "true" || "$ctx_trigger" == "true" ]]; then
   exit 0
 fi
 
-# ── NOTICE tier: [CTX-NOTICE] (once per crossing) ──────────────────────
+# ── NOTICE tier: [CTX-NOTICE] (once per crossing; gated by features.ctxNotice) ──
 if (( ctx >= CQG_CTX_NOTICE )); then
+  if [[ "$CQG_FEATURE_CTX_NOTICE" != "true" ]]; then
+    _log "$_lp → silent(ctx-notice disabled)"
+    exit 0
+  fi
   if [[ ! -f "$CQG_NOTICE_STAMP" ]]; then
     : > "$CQG_NOTICE_STAMP"
     _log "$_lp → CTX-NOTICE"

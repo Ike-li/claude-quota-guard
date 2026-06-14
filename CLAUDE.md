@@ -29,10 +29,9 @@ Three pieces connected by a one-line tab-separated snapshot file (`~/.claude/.qu
 |---|---|---|
 | `collect.sh` | Reads Claude Code's status-line JSON from stdin, extracts rate-limit + ctx fields + activity (via `quota-guard _activity`), writes snapshot | Every 10s (statusLine) |
 | `.quota-now` | Bridge file — cheap, unthrottled, atomically written via mktemp+mv | — |
-| `guard.sh` | Reads snapshot, evaluates tiers, echoes a signal to stdout → injected into context | Every prompt (UserPromptSubmit) |
-| `CLAUDE.md` block | Tells the model what to do when it sees the signal | Static rules |
+| `guard.sh` | Reads snapshot, evaluates tiers, echoes a signal to stdout → injected into context. On the CONVERGE tier it **also emits the convergence protocol inline** (from `templates/convergence.*.md`) | Every prompt (UserPromptSubmit) |
 
-The key idea: numbers go stale if hard-coded into CLAUDE.md, so the **live number** is injected via a hook and only the **rules** live in CLAUDE.md.
+The key idea: numbers go stale if hard-coded, so the **live number** is injected via a hook. The **convergence rules** are emitted inline by `guard.sh` only when `[QUOTA-LOW]` fires (rare), so the tool is self-contained and writes nothing to your `CLAUDE.md`. (`install.sh` no longer appends the protocol; older installs that did still work, and `uninstall.sh` still strips that block.)
 
 ### Snapshot format (tab-separated, single line, 8 fields)
 
@@ -70,7 +69,7 @@ Sourced by `collect.sh`, `guard.sh`, and `statusline-command.sh`. Provides:
 | Condition | Signal | Action |
 |---|---|---|
 | ctx ≥ CQG_CTX_HALT **or** 5h ≥ CQG_RATE_HALT | `[QUOTA-LOW]` | **If** agents_running > 0 **or** todos_pending > 0: converge (handoff + stop). **Else**: relay status, user decides. |
-| CQG_CTX_NOTICE ≤ ctx < CQG_CTX_HALT | `[CTX-NOTICE]` | Advise once (deduped via stamp file) |
+| CQG_CTX_NOTICE ≤ ctx < CQG_CTX_HALT **and** `features.ctxNotice` on | `[CTX-NOTICE]` | Advise once (deduped via stamp file). Silent when `features.ctxNotice=false` |
 | Below thresholds | silent | — |
 
 Rate-limit tier is gated by `CQG_MODE`: `auto` (detect from snapshot data — 5h field non-empty = subscription), `subscription` (force on), `relay` (force off). Context tier always runs regardless of mode.
@@ -79,17 +78,26 @@ Rate-limit tier is gated by `CQG_MODE`: `auto` (detect from snapshot data — 5h
 
 The `[CTX-NOTICE]` tier fires only **once per crossing**. A stamp file (`~/.claude/.cqg-notice-stamp`) is touched on first notice; subsequent prompts are silent until ctx drops below the notice threshold (which clears the stamp).
 
-### Config (`config.sh`, created from `config.example.sh` on install)
+### Config (`settings.json` authoritative; resolved by `lib/load-config.sh`)
 
-Every value can be overridden via environment variable. Key settings:
+`lib/load-config.sh` is the **single config resolver**, sourced by `guard.sh`, `collect.sh`, and `statusline-command.sh`. It resolves everything into `CQG_*` env vars with this precedence:
 
-- `CQG_CTX_NOTICE` (50), `CQG_CTX_HALT` (85), `CQG_RATE_HALT` (85) — tier thresholds
-- `CQG_MODE` (auto) — subscription/relay detection
-- `CQG_LANG` (en) — signal language: `en` | `zh`
-- `CQG_MAX_AGE` (60) — ignore snapshots older than N seconds
-- `CQG_WRAPPED_STATUSLINE` — set by installer in wrap mode; forwards stdin to user's existing status line
-- `CQG_EXPORT_JSON` (empty) — opt-in path; when set, `collect.sh` also emits the quota numbers as a standard JSON object (`{updated_at, five_hour, seven_day, context}`, `resets_at` as unix epoch seconds) for external tools to read
-- `CQG_SWEEP_RATE` (100), `CQG_SWEEP_MAX_AGE_DAYS` (7) — per-session file sweep: 1-in-N write probability and the age cutoff; `CQG_SWEEP_RATE=0` disables
+**`$CQG_CONFIG` (explicit legacy/isolated file — tests & power users; skips JSON) > individual `CQG_*` env > `~/.claude/quota-guard/settings.json` > `config.sh` baseline (stable dir) > built-in default.**
+
+`settings.json` (schema in `config/settings.schema.json`) is authoritative and now **genuinely drives the guard**, not just the statusline — this resolves the former *config-split* where `guard.sh`/`collect.sh` ignored JSON. `config.sh` survives only to carry `CQG_WRAPPED_STATUSLINE` (wrap mode) and as a legacy fallback. The plugin install dir is ephemeral, so neither file lives there.
+
+> jq gotcha: `json_get` must **not** use jq's `//` operator — `false // x` evaluates to `x`, which would silently flip every boolean toggle to its default. It uses an explicit null/empty check instead. (`mode`/`set`/`show` in the skill and the `show` command had the same trap.)
+
+Key settings (JSON path → `CQG_*`):
+- `thresholds.{ctxNotice,ctxHalt,rateHalt}` (50/85/85) — tier thresholds
+- `features.ctxNotice` (true) → `CQG_FEATURE_CTX_NOTICE` — gates the `[CTX-NOTICE]` tier (guard convergence is always on, never a toggle)
+- `mode` (auto) → `CQG_MODE` — subscription/relay detection (relay = rate monitoring off)
+- `lang` (en) → `CQG_LANG`
+- `display.statusline.elements.*` → `CQG_SHOW_*` — which data shows (`collect.sh` honors context/quota; `statusline-command.sh` honors all six)
+- `display.statusline.{preset,theme,responsive}`; `display.tui.{refreshInterval,showSparklines}` (read by the CLI via `cli/src/config.ts`)
+- `snapshot.{maxAge,sweepRate,sweepMaxAgeDays}`, `logging.{enabled,maxSize,path}`, `exportJson.{enabled,path}`
+
+**Config flow (model-driven):** the `quota-guard` skill drives configuration in chat — on `/quota-guard:quota-guard config`, Claude reads current state (`quota-guard.sh show`), asks for a mode (`full`/`essential`/`quiet`/`custom`) via the option UI, and applies it with `quota-guard.sh mode <name>` or `set <dotpath> <value>` (jq writes; dotpath sanitized against injection, values type-coerced). `install.sh` prompts for a mode on a **fresh** config (TTY only), defaulting `full`; it never clobbers an existing config.
 
 ### Installer modes
 
@@ -121,6 +129,21 @@ Tests: `cli/test/aggregate.test.js` (node built-in runner) drives the compiled `
 - `hooks.UserPromptSubmit[].hooks[].command` → `bash …/hooks/guard.sh # claude-quota-guard`
 
 The trailing `# claude-quota-guard` comment is a **stable marker** — install/uninstall match it to find the hook regardless of clone path. It's a shell comment, so it doesn't affect execution.
+
+### Plugin distribution
+
+The repo doubles as a Claude Code **plugin** (primary distribution): `.claude-plugin/plugin.json` (manifest), `.claude-plugin/marketplace.json` (so `/plugin marketplace add raylee/claude-quota-guard` → `/plugin install quota-guard` works), `hooks/hooks.json`, and the skill at `skills/quota-guard/`.
+
+What auto-wires vs. what needs `setup`:
+
+- **Auto on `/plugin install`** (via `hooks/hooks.json`, using `${CLAUDE_PLUGIN_ROOT}` which expands in hook context): the `guard.sh` UserPromptSubmit hook and the `bridge-statusline.sh` SessionStart hook. The `bin/quota-guard` CLI is auto-added to PATH.
+- **Needs `/quota-guard:quota-guard setup` once**: the **statusLine**. Plugins **cannot declare the primary `statusLine`** in the manifest (only `agent`/`subagentStatusLine` — Claude Code issue #64074), and `${CLAUDE_PLUGIN_ROOT}` is **not** expanded in the statusLine subprocess (#52079). But `collect.sh` must run as the statusLine to read the 5h/7d rate-limit JSON (#27508), which lives nowhere else. So `setup` (`install.sh`) wires `collect.sh` into `settings.json` imperatively and writes an **owner flag** (`~/.claude/quota-guard/.statusline-owner`).
+
+**`bridge-statusline.sh` (SessionStart):** gated on the owner flag (inert until `setup` runs — `/plugin install` alone never touches the statusLine). When enabled, it re-pins `collect.sh` into `settings.json` using the hook-context-expanded `${CLAUDE_PLUGIN_ROOT}` (baked as an absolute path, since the statusLine context can't expand it). This self-heals two failure modes: settings partial-rewrite stripping the field (#62486), and the plugin path changing on update. It never clobbers a foreign statusLine (only manages `collect.sh`; wrap is handled by `collect.sh`'s own `CQG_WRAPPED_STATUSLINE`).
+
+**Uninstall ordering:** `/plugin uninstall` does **not** reverse the imperative statusLine write (zombie status line, #64074). So run `/quota-guard:quota-guard uninstall` (→ `uninstall.sh`) **first** — it restores/clears the statusLine and removes the owner flag (bridge goes inert) — **then** `/plugin uninstall`.
+
+**`install.sh` is the non-plugin fallback** — same wiring via `jq` into `~/.claude/settings.json`, for users who don't use marketplaces.
 
 ### Test design
 

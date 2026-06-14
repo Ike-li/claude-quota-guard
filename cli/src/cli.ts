@@ -5,6 +5,7 @@ import { aggregate, type AggregateOptions } from './aggregate';
 import { renderQueryJson, renderQueryText } from './query';
 import { runWatch } from './tui';
 import { HUD_SCHEMA_VERSION } from './types';
+import { loadCliConfig } from './config';
 
 interface ParsedArgs {
   command: string;
@@ -129,7 +130,13 @@ async function main(): Promise<number> {
       process.stderr.write('watch requires a TTY; use `query` for non-interactive output\n');
       return 1;
     }
-    await runWatch({ ...opts, intervalMs: args.intervalMs });
+    // Dashboard display defaults come from settings.json; flags still override.
+    const cfg = loadCliConfig();
+    await runWatch({
+      ...opts,
+      intervalMs: args.intervalMs ?? cfg.intervalMs,
+      showSparklines: cfg.showSparklines,
+    });
     return 0;
   }
 

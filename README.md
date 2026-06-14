@@ -27,18 +27,24 @@ You get a ready-to-paste resume prompt for the next session.
 
 ## Quick Start
 
+**Install as a plugin (recommended):**
+
 ```bash
-# Install
-git clone https://github.com/raylee/claude-quota-guard ~/.claude/skills/quota-guard
-cd ~/.claude/skills/quota-guard
+/plugin marketplace add raylee/claude-quota-guard
+/plugin install quota-guard
+/quota-guard:quota-guard setup     # one-time: wire statusLine + build CLI
+/quota-guard:quota-guard doctor    # verify
+```
 
-# Setup (one-time)
-/quota-guard setup
+Restart Claude Code. `/plugin install` auto-wires the guard hook and the CLI;
+`setup` wires the statusLine (which plugins can't declare on their own — see
+[How It Works](#how-it-works)) and marks it as ours so it self-heals each session.
 
-# Verify it works
-/quota-guard doctor
+**Manual install (non-plugin fallback):**
 
-# Restart Claude Code
+```bash
+git clone https://github.com/raylee/claude-quota-guard
+cd claude-quota-guard && ./install.sh
 ```
 
 **That's it.** Next time you hit 85% quota, you'll see:
@@ -56,7 +62,7 @@ The model will write a handoff file and stop. Copy the resume prompt, paste into
 | Feature | Description |
 |---------|-------------|
 | 🛡️ **Active protection** | Only tool that prevents mid-task exhaustion (others just display) |
-| 📊 **Live monitoring** | Statusline + TUI dashboard (`/quota-guard watch`) |
+| 📊 **Live monitoring** | Statusline + TUI dashboard (`/quota-guard:quota-guard watch`) |
 | 🎨 **Customizable** | 3 themes, 3 presets, responsive layout |
 | 📈 **Analytics** | Cost trends, cache savings, tool stats, error tracking |
 | 🌐 **Universal** | Works with subscription OR API relay (auto-detects) |
@@ -68,47 +74,64 @@ The model will write a handoff file and stop. Copy the resume prompt, paste into
 ### Common Commands
 
 ```bash
-/quota-guard watch       # Launch live dashboard
-/quota-guard config      # Edit settings
-/quota-guard theme nord  # Switch theme
-/quota-guard doctor      # Diagnose issues
+/quota-guard:quota-guard config      # Guided setup (modes + custom, in chat)
+/quota-guard:quota-guard watch       # Launch live dashboard
+/quota-guard:quota-guard theme nord  # Switch theme
+/quota-guard:quota-guard doctor      # Diagnose issues
 ```
 
-Full command reference: [skill/SKILL.md](skill/SKILL.md)
+Full command reference: [skills/quota-guard/SKILL.md](skills/quota-guard/SKILL.md)
 
 ### Configuration
 
-**Convergence thresholds** (when the signal fires) live in `config.sh` in the install
-directory — `guard.sh` and `collect.sh` source it:
-
-```sh
-CQG_CTX_HALT=85     # converge at 85% context
-CQG_RATE_HALT=85    # converge at 85% 5h quota
-CQG_CTX_NOTICE=50   # one-time notice at 50% context
-```
-
-**Statusline appearance** lives in `~/.claude/quota-guard/settings.json` (read by
-`statusline-command.sh`), or set it with commands:
+Easiest path — ask in chat: **`/quota-guard:quota-guard config`** walks you through
+it (pick a mode, or customize which data shows and which features are on). "Just press
+Enter / accept defaults" = everything on.
 
 ```bash
-/quota-guard preset minimal     # minimal | compact | full
-/quota-guard theme cyberpunk    # catppuccin-mocha | cyberpunk | nord
+/quota-guard:quota-guard config                        # guided: modes + custom
+/quota-guard:quota-guard mode essential                # full | essential | quiet
+/quota-guard:quota-guard set features.ctxNotice false  # toggle one capability
+/quota-guard:quota-guard show                          # current effective config
 ```
 
-> Threshold keys in `settings.json` do **not** yet reach `guard.sh` — edit `config.sh`
-> (or the matching `CQG_*` environment variables) to change convergence behavior.
+It all lives in **`~/.claude/quota-guard/settings.json`** and now genuinely drives
+**both** the guard hooks and the display (resolved by `lib/load-config.sh`):
+
+```json
+{ "thresholds": { "ctxHalt": 85, "rateHalt": 85, "ctxNotice": 50 },
+  "features": { "ctxNotice": true },
+  "display": { "statusline": { "elements": { "context": true, "quota": true, "git": true } } } }
+```
+
+Resolution precedence: `CQG_*` env var > `settings.json` > `config.sh` > built-in
+default. (`config.sh` is a stable dir, not the ephemeral plugin dir; it now only
+carries the wrapped-statusLine command used by wrap mode.)
+
+**Modes:** `full` (all data + notices), `essential` (context + quota, compact),
+`quiet` (convergence only — no `[CTX-NOTICE]`, minimal line). Guard convergence is the
+core capability and is always on.
 
 ---
 
 ## How It Works
 
 ```
-Claude Code stdin → collect.sh → snapshot file
-                                       ↓
-User prompt → guard.sh reads snapshot → injects [QUOTA-LOW]
+Claude Code stdin → collect.sh (statusLine) → snapshot file
+                                                    ↓
+User prompt → guard.sh reads snapshot → injects [QUOTA-LOW] + convergence protocol
                                               ↓
 Model sees signal → writes handoff → stops
 ```
+
+**Plugin wiring.** `/plugin install` auto-registers the `guard.sh` (UserPromptSubmit)
+hook and the CLI. But Claude Code plugins **cannot declare the primary `statusLine`**
+([#64074](https://github.com/anthropics/claude-code/issues/64074)), and `collect.sh`
+must run as the statusLine to read the 5h/7d rate-limit JSON. So `setup` wires
+`collect.sh` into `settings.json`, and a `SessionStart` hook (`bridge-statusline.sh`)
+re-pins it each session — self-healing against settings rewrites and plugin-path
+changes. The convergence protocol is emitted **inline by `guard.sh`** when the signal
+fires, so nothing is written to your `CLAUDE.md`.
 
 Architecture details: [CLAUDE.md](CLAUDE.md)
 
@@ -136,7 +159,7 @@ More: [docs/troubleshooting.md](docs/troubleshooting.md)
 
 - **[Getting Started](docs/getting-started.md)** - 5-minute install tutorial
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues
-- **[Skill Commands](skill/SKILL.md)** - Full `/quota-guard` reference
+- **[Skill Commands](skills/quota-guard/SKILL.md)** - Full `/quota-guard:quota-guard` reference
 - **[Architecture](CLAUDE.md)** - How it works (internals)
 - **[Development](docs/DEVELOPMENT.md)** - Contributor guide
 - **[Roadmap](docs/ROADMAP.md)** - Planned features

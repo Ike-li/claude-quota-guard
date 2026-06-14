@@ -46,6 +46,17 @@
       "default": "en",
       "description": "Signal language"
     },
+    "features": {
+      "type": "object",
+      "description": "Functional capability toggles. Guard convergence ([QUOTA-LOW] handoff) is always on and not listed here. Rate-limit monitoring is controlled by `mode` (relay = off).",
+      "properties": {
+        "ctxNotice": {
+          "type": "boolean",
+          "default": true,
+          "description": "Emit the mid-context [CTX-NOTICE] advisory tier. Disabling it silences the advisory only; convergence still fires at ctxHalt."
+        }
+      }
+    },
     "display": {
       "type": "object",
       "properties": {
