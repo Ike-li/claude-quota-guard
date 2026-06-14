@@ -9,6 +9,13 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib/load-config.sh"
 
+# load-config.sh runs `set -euo pipefail`; sourcing it leaks those options into
+# this script. This is a display renderer that must tolerate missing JSON
+# fields, empty arrays (no effort/thinking → empty mode_parts), and failing
+# subcommands (git/jq/tput). Relax errexit+nounset so one empty value can never
+# blank the entire status line.
+set +eu
+
 input=$(cat)
 
 # Terminal width detection
@@ -43,48 +50,67 @@ if [ "${CQG_STATUSLINE_RESPONSIVE:-true}" = "true" ]; then
   fi
 fi
 
-# Theme colors (loaded from theme file via load-config.sh)
-# Fallback based on terminal capability: truecolor > 256color > 16color
-if [[ "$COLORTERM" == "truecolor" ]] || [[ "$COLORTERM" == "24bit" ]]; then
-  # Terminal supports 24-bit color
-  RED="${CQG_THEME_RED:-\033[38;2;243;139;168m}"
-  PEACH="${CQG_THEME_PEACH:-\033[38;2;250;179;135m}"
-  YELLOW="${CQG_THEME_YELLOW:-\033[38;2;249;226;175m}"
-  GREEN="${CQG_THEME_GREEN:-\033[38;2;166;227;161m}"
-  SAPPHIRE="${CQG_THEME_SAPPHIRE:-\033[38;2;116;199;236m}"
-  MAUVE="${CQG_THEME_MAUVE:-\033[38;2;203;166;247m}"
-  SKY="${CQG_THEME_SKY:-\033[38;2;137;220;235m}"
-  ROSE="${CQG_THEME_PINK:-\033[38;2;245;194;231m}"
-  GOLD="${CQG_THEME_YELLOW:-\033[38;2;249;226;175m}"
-  SUBTEXT="${CQG_THEME_SUBTEXT1:-\033[38;2;166;173;200m}"
-  DIM="${CQG_THEME_OVERLAY0:-\033[38;2;108;112;134m}"
-elif [[ "$TERM" == *"256color"* ]]; then
-  # Fallback to 256-color mode (ANSI 256)
-  RED="\033[38;5;204m"      # Light red
-  PEACH="\033[38;5;216m"    # Peach
-  YELLOW="\033[38;5;229m"   # Light yellow
-  GREEN="\033[38;5;151m"    # Light green
-  SAPPHIRE="\033[38;5;117m" # Light blue
-  MAUVE="\033[38;5;183m"    # Light purple
-  SKY="\033[38;5;117m"      # Cyan
-  ROSE="\033[38;5;218m"     # Pink
-  GOLD="\033[38;5;229m"     # Gold (same as yellow)
-  SUBTEXT="\033[38;5;249m"  # Gray
-  DIM="\033[38;5;240m"      # Dark gray
-else
-  # Fallback to basic 16 ANSI colors
-  RED="\033[91m"      # Bright red
-  PEACH="\033[33m"    # Yellow (closest to peach)
-  YELLOW="\033[93m"   # Bright yellow
-  GREEN="\033[92m"    # Bright green
-  SAPPHIRE="\033[94m" # Bright blue
-  MAUVE="\033[95m"    # Bright magenta
-  SKY="\033[96m"      # Bright cyan
-  ROSE="\033[95m"     # Bright magenta
-  GOLD="\033[93m"     # Bright yellow
-  SUBTEXT="\033[37m"  # White
-  DIM="\033[90m"      # Bright black (gray)
-fi
+# ── Theme colors ───────────────────────────────────────────────────────
+# Themes (themes/*.sh, sourced by load-config.sh) define colors as readable
+# #RRGGBB hex. The status line needs ANSI escapes, so convert here — honoring
+# terminal color depth so a theme degrades gracefully on 256/16-color terminals
+# instead of having its raw hex printed literally. Built-in defaults mirror the
+# default catppuccin-mocha theme, so the look is identical when no theme loads.
+case "$COLORTERM" in
+  truecolor|24bit) COLOR_DEPTH=truecolor ;;
+  *) case "$TERM" in
+       *256color*) COLOR_DEPTH=256 ;;
+       *)          COLOR_DEPTH=16 ;;
+     esac ;;
+esac
+
+# hex_to_ansi "#RRGGBB" → literal `\033[...m` SGR foreground for $COLOR_DEPTH.
+# Emits the literal backslash-033 form (not a raw ESC) so the existing
+# `printf '%b'` call sites render it. Non-hex input is passed through unchanged.
+hex_to_ansi() {
+  local hex="${1#\#}"
+  case "$hex" in
+    [0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]) ;;
+    *) printf '%s' "$1"; return ;;
+  esac
+  local r=$((16#${hex:0:2})) g=$((16#${hex:2:2})) b=$((16#${hex:4:2}))
+  case "$COLOR_DEPTH" in
+    truecolor)
+      printf '\\033[38;2;%d;%d;%dm' "$r" "$g" "$b" ;;
+    256)
+      # 6×6×6 color cube + grayscale ramp (xterm-256 standard)
+      local idx
+      if [ "$r" -eq "$g" ] && [ "$g" -eq "$b" ]; then
+        if   [ "$r" -lt 8 ];   then idx=16
+        elif [ "$r" -gt 248 ]; then idx=231
+        else idx=$(( 232 + (r - 8) * 24 / 247 )); fi
+      else
+        idx=$(( 16 + 36*(r*5/255) + 6*(g*5/255) + (b*5/255) ))
+      fi
+      printf '\\033[38;5;%dm' "$idx" ;;
+    *)
+      # nearest basic 16 ANSI: per-channel threshold, brighten if any channel high
+      local mx=$r; [ "$g" -gt "$mx" ] && mx=$g; [ "$b" -gt "$mx" ] && mx=$b
+      local base=0
+      [ "$r" -ge 128 ] && base=$((base+1))
+      [ "$g" -ge 128 ] && base=$((base+2))
+      [ "$b" -ge 128 ] && base=$((base+4))
+      if [ "$mx" -ge 192 ]; then printf '\\033[%dm' "$((90+base))"
+      else                       printf '\\033[%dm' "$((30+base))"; fi ;;
+  esac
+}
+
+RED=$(hex_to_ansi      "${CQG_THEME_RED:-#f38ba8}")
+PEACH=$(hex_to_ansi    "${CQG_THEME_PEACH:-#fab387}")
+YELLOW=$(hex_to_ansi   "${CQG_THEME_YELLOW:-#f9e2af}")
+GREEN=$(hex_to_ansi    "${CQG_THEME_GREEN:-#a6e3a1}")
+SAPPHIRE=$(hex_to_ansi "${CQG_THEME_SAPPHIRE:-#74c7ec}")
+MAUVE=$(hex_to_ansi    "${CQG_THEME_MAUVE:-#cba6f7}")
+SKY=$(hex_to_ansi      "${CQG_THEME_SKY:-#89dceb}")
+ROSE=$(hex_to_ansi     "${CQG_THEME_PINK:-#f5c2e7}")
+GOLD=$(hex_to_ansi     "${CQG_THEME_YELLOW:-#f9e2af}")
+SUBTEXT=$(hex_to_ansi  "${CQG_THEME_SUBTEXT1:-#bac2de}")
+DIM=$(hex_to_ansi      "${CQG_THEME_OVERLAY0:-#6c7086}")
 RESET="\033[0m"
 
 # Color a percentage by threshold.
