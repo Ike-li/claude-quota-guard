@@ -27,7 +27,7 @@ which bash jq node npm
 
 ```bash
 # Clone to Claude Code's skills directory
-git clone https://github.com/raylee/claude-quota-guard ~/.claude/skills/quota-guard
+git clone https://github.com/Ike-li/claude-quota-guard ~/.claude/skills/quota-guard
 
 # Navigate to directory
 cd ~/.claude/skills/quota-guard
@@ -252,4 +252,4 @@ npm run build
 ~/.claude/quota-guard.log
 ```
 
-**Got stuck?** Open an issue: https://github.com/raylee/claude-quota-guard/issues
+**Got stuck?** Open an issue: https://github.com/Ike-li/claude-quota-guard/issues

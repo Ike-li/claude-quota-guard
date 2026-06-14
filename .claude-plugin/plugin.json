@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Monitor Claude Code's 5h/7d rate limits and context usage; inject convergence signals to prevent mid-task quota exhaustion",
   "author": { "name": "raylee" },
-  "homepage": "https://github.com/raylee/claude-quota-guard",
-  "repository": "https://github.com/raylee/claude-quota-guard",
+  "homepage": "https://github.com/Ike-li/claude-quota-guard",
+  "repository": "https://github.com/Ike-li/claude-quota-guard",
   "license": "MIT",
   "keywords": [
     "claude-code",

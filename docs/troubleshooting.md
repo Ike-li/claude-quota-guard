@@ -494,7 +494,7 @@ jq '.' ~/.claude/quota-guard/settings.json >> settings-dump.json
 4. Claude Code version: `claude --version`
 5. What you tried
 
-Open at: https://github.com/raylee/claude-quota-guard/issues
+Open at: https://github.com/Ike-li/claude-quota-guard/issues
 
 ---
 

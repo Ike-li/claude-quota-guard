@@ -22,7 +22,7 @@ bash "${CLAUDE_SKILL_DIR}/quota-guard.sh" <command> [args]
 Installed as a plugin (recommended):
 
 ```bash
-/plugin marketplace add raylee/claude-quota-guard
+/plugin marketplace add Ike-li/claude-quota-guard
 /plugin install quota-guard
 /quota-guard:quota-guard setup     # one-time: wire statusLine + build CLI
 ```
@@ -166,4 +166,4 @@ Common issues:
 
 ## Documentation
 
-Full docs: https://github.com/raylee/claude-quota-guard
+Full docs: https://github.com/Ike-li/claude-quota-guard

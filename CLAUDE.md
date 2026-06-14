@@ -132,7 +132,7 @@ The trailing `# claude-quota-guard` comment is a **stable marker** — install/u
 
 ### Plugin distribution
 
-The repo doubles as a Claude Code **plugin** (primary distribution): `.claude-plugin/plugin.json` (manifest), `.claude-plugin/marketplace.json` (so `/plugin marketplace add raylee/claude-quota-guard` → `/plugin install quota-guard` works), `hooks/hooks.json`, and the skill at `skills/quota-guard/`.
+The repo doubles as a Claude Code **plugin** (primary distribution): `.claude-plugin/plugin.json` (manifest), `.claude-plugin/marketplace.json` (so `/plugin marketplace add Ike-li/claude-quota-guard` → `/plugin install quota-guard` works), `hooks/hooks.json`, and the skill at `skills/quota-guard/`.
 
 What auto-wires vs. what needs `setup`:
 

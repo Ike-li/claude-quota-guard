@@ -30,7 +30,7 @@ You get a ready-to-paste resume prompt for the next session.
 **Install as a plugin (recommended):**
 
 ```bash
-/plugin marketplace add raylee/claude-quota-guard
+/plugin marketplace add Ike-li/claude-quota-guard
 /plugin install quota-guard
 /quota-guard:quota-guard setup     # one-time: wire statusLine + build CLI
 /quota-guard:quota-guard doctor    # verify
@@ -43,7 +43,7 @@ Restart Claude Code. `/plugin install` auto-wires the guard hook and the CLI;
 **Manual install (non-plugin fallback):**
 
 ```bash
-git clone https://github.com/raylee/claude-quota-guard
+git clone https://github.com/Ike-li/claude-quota-guard
 cd claude-quota-guard && ./install.sh
 ```
 

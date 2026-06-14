@@ -14,7 +14,7 @@
 
 ```bash
 # 克隆到你的开发目录（不是 .claude/skills/）
-git clone https://github.com/raylee/claude-quota-guard ~/code/claude-quota-guard
+git clone https://github.com/Ike-li/claude-quota-guard ~/code/claude-quota-guard
 cd ~/code/claude-quota-guard
 ```
 
@@ -256,7 +256,7 @@ git push origin main --tags
 
 ```bash
 # 方式 1: 手动克隆（当前推荐）
-git clone https://github.com/raylee/claude-quota-guard ~/.claude/skills/quota-guard
+git clone https://github.com/Ike-li/claude-quota-guard ~/.claude/skills/quota-guard
 /quota-guard setup
 
 # 方式 2: Claude plugin（未来）
@@ -274,7 +274,7 @@ claude plugin install quota-guard
 ln -s ~/code/claude-quota-guard ~/.claude/skills/quota-guard-dev
 
 # 稳定版（真实目录）
-git clone https://github.com/raylee/claude-quota-guard ~/.claude/skills/quota-guard
+git clone https://github.com/Ike-li/claude-quota-guard ~/.claude/skills/quota-guard
 ```
 
 在 `~/.claude/settings.json` 的 `statusLine.command` 中指向想用的那份
@@ -306,7 +306,7 @@ ln -s ~/code/claude-quota-guard ~/.claude/skills/quota-guard
 rm ~/.claude/skills/quota-guard
 
 # 重新克隆稳定版
-git clone https://github.com/raylee/claude-quota-guard ~/.claude/skills/quota-guard
+git clone https://github.com/Ike-li/claude-quota-guard ~/.claude/skills/quota-guard
 
 # 重新安装
 /quota-guard setup

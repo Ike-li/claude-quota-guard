@@ -188,9 +188,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Links
 
-- **Repository**: https://github.com/raylee/claude-quota-guard
-- **Issues**: https://github.com/raylee/claude-quota-guard/issues
-- **Discussions**: https://github.com/raylee/claude-quota-guard/discussions
+- **Repository**: https://github.com/Ike-li/claude-quota-guard
+- **Issues**: https://github.com/Ike-li/claude-quota-guard/issues
+- **Discussions**: https://github.com/Ike-li/claude-quota-guard/discussions
 
 ---
 

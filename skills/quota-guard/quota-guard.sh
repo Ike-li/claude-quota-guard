@@ -382,7 +382,7 @@ Examples:
   /quota-guard:quota-guard set display.statusline.elements.git false
   /quota-guard:quota-guard show
 
-Documentation: https://github.com/raylee/claude-quota-guard
+Documentation: https://github.com/Ike-li/claude-quota-guard
 EOF
     ;;
 
