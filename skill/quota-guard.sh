@@ -217,7 +217,7 @@ case "$cmd" in
     echo ""
     echo "  └─ If you see colored circles above, colors work!"
     echo "     If you see [91m● etc, colors are broken."
-    echo "     See: docs/TROUBLESHOOTING-COLORS.md"
+    echo "     See: docs/troubleshooting.md"
 
     # Check dependencies
     echo ""
@@ -251,7 +251,7 @@ case "$cmd" in
 
     if [ "$statusline_ok" = true ] && [ "$guard_ok" = true ]; then
       echo "✅ Installation looks healthy!"
-      echo "   If statusline doesn't show colors, see docs/TROUBLESHOOTING-COLORS.md"
+      echo "   If statusline doesn't show colors, see docs/troubleshooting.md"
     else
       echo "⚠️  Installation incomplete. Run: /quota-guard setup"
     fi

@@ -1,5 +1,7 @@
 # local config (created by install.sh from config.example.sh)
 config.sh
+# install.sh wrap-mode helper (holds the wrapped statusLine command)
+.cqg-wrap.json
 # runtime / backups
 *.cqg-backup.*
 .quota-now

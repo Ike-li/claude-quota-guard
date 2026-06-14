@@ -63,7 +63,6 @@ fi
 # persist lang into JSON config
 tmp=$(mktemp)
 jq --arg lang "$lang" '.lang = $lang' "$JSON_CONFIG" > "$tmp" && mv "$tmp" "$JSON_CONFIG"
-fi
 say "→ Language: $lang"
 
 # ── 4. settings.json: detect existing statusLine → wrap or standalone ───
